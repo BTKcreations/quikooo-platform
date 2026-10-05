@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
+const path = require('path');
 const { Server } = require('socket.io');
 
 const config = require('./config');
@@ -24,6 +25,7 @@ const settlementsRoutes = require('./modules/settlements/settlements.routes');
 const adminRoutes = require('./modules/admin/admin.routes');
 const notificationsRoutes = require('./modules/notifications/notifications.routes');
 const reportsRoutes = require('./modules/reports/reports.routes');
+const uploadsRoutes = require('./modules/uploads/uploads.routes');
 
 const { initRealtime } = require('./realtime');
 
@@ -70,6 +72,9 @@ const healthCheckHandler = (req, res) => {
 app.get('/health', healthCheckHandler);
 app.get(`${config.apiPrefix}/health`, healthCheckHandler);
 
+// Static uploads serving
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
 // Mount API Modules
 app.use(`${config.apiPrefix}/auth`, authRoutes);
 app.use(`${config.apiPrefix}/users`, usersRoutes);
@@ -85,6 +90,7 @@ app.use(`${config.apiPrefix}/settlements`, settlementsRoutes);
 app.use(`${config.apiPrefix}/admin`, adminRoutes);
 app.use(`${config.apiPrefix}/notifications`, notificationsRoutes);
 app.use(`${config.apiPrefix}/reports`, reportsRoutes);
+app.use(`${config.apiPrefix}/uploads`, uploadsRoutes);
 
 // Catch 404 & Central Error Handling
 app.use(notFoundHandler);

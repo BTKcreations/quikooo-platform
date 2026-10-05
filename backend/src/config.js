@@ -53,7 +53,33 @@ const config = {
     VENDOR: 'VENDOR',
     DELIVERY_PARTNER: 'DELIVERY_PARTNER',
     CUSTOMER: 'CUSTOMER',
-  }
+  },
+
+  razorpay: {
+    keyId: process.env.RAZORPAY_KEY_ID || '',
+    keySecret: process.env.RAZORPAY_KEY_SECRET || '',
+    webhookSecret: process.env.PAYMENT_WEBHOOK_SECRET || 'quikooo_webhook_secret_key',
+  },
+
+  redis: {
+    url: process.env.REDIS_URL || '',
+  },
+
+  s3: {
+    bucket: process.env.AWS_S3_BUCKET || '',
+    region: process.env.AWS_REGION || process.env.AWS_S3_REGION || 'ap-south-1',
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID || process.env.AWS_S3_ACCESS_KEY_ID || '',
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || process.env.AWS_S3_SECRET_ACCESS_KEY || '',
+    endpoint: process.env.AWS_S3_ENDPOINT || undefined,
+  },
+
+  notifications: {
+    fcmKey: process.env.FCM_KEY || process.env.FCM_SERVER_KEY || '',
+    msg91AuthKey: process.env.MSG91_AUTH_KEY || '',
+    twilioAccountSid: process.env.TWILIO_ACCOUNT_SID || '',
+    twilioAuthToken: process.env.TWILIO_AUTH_TOKEN || '',
+    twilioPhoneNumber: process.env.TWILIO_PHONE_NUMBER || '',
+  },
 };
 
 module.exports = config;

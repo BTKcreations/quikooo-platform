@@ -1,5 +1,6 @@
 const OrderService = require('../../services/OrderService');
 const db = require('../../db');
+const notificationQueue = require('../notifications/queue');
 
 // In-memory order store for offline/test environments
 const orderMemoryStore = new Map();
@@ -52,7 +53,12 @@ class OrdersModuleService {
           ]
         );
         await client.query('COMMIT');
-        return orderInsert.rows[0];
+        const insertedOrder = orderInsert.rows[0];
+
+        // Non-blocking notification dispatch for order placed
+        notificationQueue.notifyOrderEvent(insertedOrder, 'placed');
+
+        return insertedOrder;
       } catch (err) {
         await client.query('ROLLBACK');
         throw err;
@@ -69,6 +75,10 @@ class OrdersModuleService {
       _persisted: false,
     };
     orderMemoryStore.set(orderId, mockOrder);
+
+    // Non-blocking notification dispatch for order placed
+    notificationQueue.notifyOrderEvent(mockOrder, 'placed');
+
     return mockOrder;
   }
 
@@ -97,6 +107,18 @@ class OrdersModuleService {
 
     if (db.isConnected()) {
       await db.query('UPDATE orders SET status = $1, updated_at = NOW() WHERE id = $2', [nextStatus, id]);
+    }
+
+    // Non-blocking notification dispatch for status changes
+    if (nextStatus === OrderService.ORDER_STATUS.VENDOR_ACCEPTED) {
+      notificationQueue.notifyOrderEvent(order, 'accepted');
+    } else if (
+      nextStatus === OrderService.ORDER_STATUS.READY_FOR_PICKUP ||
+      nextStatus === OrderService.ORDER_STATUS.READY_FOR_MORNING_DISPATCH
+    ) {
+      notificationQueue.notifyOrderEvent(order, 'ready');
+    } else if (nextStatus === OrderService.ORDER_STATUS.DELIVERED) {
+      notificationQueue.notifyOrderEvent(order, 'delivered');
     }
 
     return order;
