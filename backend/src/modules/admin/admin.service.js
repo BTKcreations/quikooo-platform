@@ -1,8 +1,8 @@
 const config = require('../../config');
+const { getAuditLogs, logAuditEvent, AUDIT_ACTIONS } = require('../../middleware/audit');
 
 class AdminService {
   static async getSystemConfig() {
-    // TODO: Connect to DB system_config table
     return {
       pricing: config.pricing,
       zones: config.zones,
@@ -10,8 +10,29 @@ class AdminService {
     };
   }
 
-  static async updateSystemConfig(updates) {
-    // TODO: Update system_config table
+  static async updateSystemConfig(updates, user = null) {
+    const oldConfig = {
+      pricing: { ...config.pricing },
+      zones: { ...config.zones },
+      tax: { ...config.tax },
+    };
+
+    // Apply updates in memory
+    if (updates.pricing) Object.assign(config.pricing, updates.pricing);
+    if (updates.zones) Object.assign(config.zones, updates.zones);
+    if (updates.tax) Object.assign(config.tax, updates.tax);
+
+    // Record audit event
+    await logAuditEvent({
+      userId: user?.id || null,
+      actor: user?.fullName || user?.email || 'SuperAdmin',
+      action: AUDIT_ACTIONS.CONFIG_UPDATE,
+      resourceType: 'CONFIG',
+      resourceId: 'SYSTEM_CONFIG',
+      oldState: oldConfig,
+      newState: updates,
+    });
+
     return {
       updated: updates,
       updatedAt: new Date().toISOString(),
@@ -19,12 +40,7 @@ class AdminService {
   }
 
   static async getAuditLogs(filters = {}) {
-    // TODO: Connect to DB audit_logs table
-    return {
-      logs: [],
-      total: 0,
-      filters,
-    };
+    return await getAuditLogs(filters);
   }
 }
 
