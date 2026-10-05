@@ -76,6 +76,76 @@ export function calculateEarningsProgress(completedCount, dailyTargetCount = 16)
 }
 
 /**
+ * Calculates percentage for earnings progress ring, clamped between 0 and 100
+ */
+export function calculateRingPercentage(completed, target) {
+  const c = Math.max(0, Number(completed) || 0);
+  const t = Math.max(1, Number(target) || 1);
+  return Math.min(100, Math.max(0, Math.round((c / t) * 100)));
+}
+
+/**
+ * Calculates SVG stroke dashoffset given percentage and radius
+ */
+export function calculateRingOffset(percentage, radius = 38) {
+  const pct = Math.min(100, Math.max(0, Number(percentage) || 0));
+  const circumference = 2 * Math.PI * radius;
+  return circumference - (pct / 100) * circumference;
+}
+
+/**
+ * Pure helper to parse pasted OTP text.
+ * Strips non-digit characters and extracts up to `length` digits.
+ */
+export function parseOtpPaste(pastedText, length = 4) {
+  if (!pastedText) {
+    return {
+      digits: Array(length).fill(''),
+      value: '',
+      nextIndex: 0,
+      isComplete: false,
+    };
+  }
+
+  const cleaned = String(pastedText).replace(/\D/g, '').slice(0, length);
+  const digits = Array(length).fill('');
+  for (let i = 0; i < cleaned.length; i++) {
+    digits[i] = cleaned[i];
+  }
+
+  const nextIndex = Math.min(cleaned.length, length - 1);
+  return {
+    digits,
+    value: cleaned,
+    nextIndex,
+    isComplete: cleaned.length === length,
+  };
+}
+
+/**
+ * Pure helper to calculate next focus index upon input or backspace
+ */
+export function getNextOtpIndex(currentIndex, action, currentVal = '', maxLen = 4) {
+  if (action === 'forward' || action === 'input') {
+    return Math.min(currentIndex + 1, maxLen - 1);
+  }
+  if (action === 'backward' || action === 'backspace') {
+    if (!currentVal && currentIndex > 0) {
+      return currentIndex - 1;
+    }
+  }
+  return currentIndex;
+}
+
+/**
+ * Formats an array of digits into a clean string representation
+ */
+export function formatOtpDigits(digits, length = 4) {
+  if (!Array.isArray(digits)) return '';
+  return digits.slice(0, length).join('');
+}
+
+/**
  * Validates delivery handshake OTP (Vendor pickup OTP or Customer delivery OTP)
  * Strictly requires 4 numeric digits (e.g. "4512")
  */

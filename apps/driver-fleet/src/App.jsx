@@ -4,6 +4,7 @@ import PrefetchLink from './components/PrefetchLink.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import OfflineBanner from './components/OfflineBanner.jsx';
 import { SkeletonPage } from './components/Skeleton.jsx';
+import ToastProvider from './components/Toast.jsx';
 import './theme.css';
 
 // Convert route pages to React.lazy() for instant zero-lag navigation
@@ -22,9 +23,10 @@ export default function App() {
   };
 
   return (
-    <div className="app-viewport">
-      {/* Non-blocking Offline Banner */}
-      <OfflineBanner />
+    <ToastProvider>
+      <div className="app-viewport">
+        {/* Non-blocking Offline Banner */}
+        <OfflineBanner />
 
       <div className="mobile-shell">
         {/* Desktop Sidebar (lg >= 1024px) */}
@@ -156,5 +158,6 @@ export default function App() {
         </nav>
       </div>
     </div>
+  </ToastProvider>
   );
 }

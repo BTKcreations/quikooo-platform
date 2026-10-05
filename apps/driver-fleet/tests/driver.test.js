@@ -138,6 +138,93 @@ describe('Driver Fleet Tests', () => {
       expect(executions).toBe(1);
       expect(res).toBe(30);
     });
+
+    it('OTP paste/advance helper parses clipboard text and manages auto-advance focus navigation', () => {
+      const { parseOtpPaste, getNextOtpIndex } = require('../src/api.js');
+
+      // 4-digit valid paste
+      const validPaste = parseOtpPaste('4512');
+      expect(validPaste.value).toBe('4512');
+      expect(validPaste.digits).toEqual(['4', '5', '1', '2']);
+      expect(validPaste.isComplete).toBe(true);
+      expect(validPaste.nextIndex).toBe(3);
+
+      // Paste formatted text with non-numeric noise
+      const noisyPaste = parseOtpPaste('OTP-89 34');
+      expect(noisyPaste.value).toBe('8934');
+      expect(noisyPaste.digits).toEqual(['8', '9', '3', '4']);
+      expect(noisyPaste.isComplete).toBe(true);
+
+      // Short / partial paste
+      const partial = parseOtpPaste('12');
+      expect(partial.value).toBe('12');
+      expect(partial.digits).toEqual(['1', '2', '', '']);
+      expect(partial.isComplete).toBe(false);
+      expect(partial.nextIndex).toBe(2);
+
+      // Long paste truncated to 4
+      const longPaste = parseOtpPaste('123456');
+      expect(longPaste.value).toBe('1234');
+      expect(longPaste.digits).toEqual(['1', '2', '3', '4']);
+      expect(longPaste.isComplete).toBe(true);
+
+      // Empty or null paste
+      expect(parseOtpPaste('')).toEqual({
+        digits: ['', '', '', ''],
+        value: '',
+        nextIndex: 0,
+        isComplete: false,
+      });
+
+      // Auto-advance navigation on forward digit input
+      expect(getNextOtpIndex(0, 'input', '4', 4)).toBe(1);
+      expect(getNextOtpIndex(1, 'input', '5', 4)).toBe(2);
+      expect(getNextOtpIndex(2, 'input', '1', 4)).toBe(3);
+      expect(getNextOtpIndex(3, 'input', '2', 4)).toBe(3); // Capped at 3
+
+      // Backspace moves focus back only when current box is empty
+      expect(getNextOtpIndex(3, 'backspace', '', 4)).toBe(2);
+      expect(getNextOtpIndex(1, 'backspace', '', 4)).toBe(0);
+      expect(getNextOtpIndex(0, 'backspace', '', 4)).toBe(0);
+      expect(getNextOtpIndex(2, 'backspace', '9', 4)).toBe(2); // Non-empty maintains index
+    });
+
+    it('earnings ring pct calc computes percentages and SVG stroke dashoffsets for target ring', () => {
+      const { calculateRingPercentage, calculateRingOffset } = require('../src/api.js');
+
+      // Percentage calculation across milestones
+      expect(calculateRingPercentage(0, 16)).toBe(0);
+      expect(calculateRingPercentage(4, 16)).toBe(25);
+      expect(calculateRingPercentage(8, 16)).toBe(50);
+      expect(calculateRingPercentage(12, 16)).toBe(75);
+      expect(calculateRingPercentage(16, 16)).toBe(100);
+
+      // Overachieved target capped at 100%
+      expect(calculateRingPercentage(20, 16)).toBe(100);
+      expect(calculateRingPercentage(32, 16)).toBe(100);
+
+      // Graceful handling of invalid / negative inputs
+      expect(calculateRingPercentage(-5, 16)).toBe(0);
+      expect(calculateRingPercentage(null, 16)).toBe(0);
+      expect(calculateRingPercentage(undefined, 16)).toBe(0);
+
+      // SVG Stroke dashoffset calculation
+      const radius = 38;
+      const circumference = 2 * Math.PI * radius;
+
+      // At 0%: offset equals circumference (full track empty)
+      expect(calculateRingOffset(0, radius)).toBeCloseTo(circumference, 3);
+
+      // At 50%: offset is half circumference
+      expect(calculateRingOffset(50, radius)).toBeCloseTo(circumference * 0.5, 3);
+
+      // At 100%: offset is 0 (full track filled)
+      expect(calculateRingOffset(100, radius)).toBeCloseTo(0, 3);
+
+      // At >100%: clamped to 0
+      expect(calculateRingOffset(125, radius)).toBeCloseTo(0, 3);
+    });
   });
 });
+
 
