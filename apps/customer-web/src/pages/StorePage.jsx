@@ -2,17 +2,20 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { getVendorById, getVendorProducts } from '../api.js';
 import { useCart } from '../store/cart.js';
+import { useToast } from '../components/Toast.jsx';
+import { SkeletonCard } from '../components/Skeleton.jsx';
 
 export default function StorePage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const cart = useCart();
+  const { showToast } = useToast();
 
   const [vendor, setVendor] = useState(null);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [conflictModal, setConflictModal] = useState(null);
-  const [feedbackMsg, setFeedbackMsg] = useState('');
+  const [visibleCount, setVisibleCount] = useState(20);
 
   useEffect(() => {
     async function loadStore() {
@@ -33,6 +36,7 @@ export default function StorePage() {
             cuisine: 'Authentic Indian, Biryani & Tandoor',
             rating: 4.8,
             etaMinutes: 12,
+            distanceKm: 1.2,
           });
         }
 
@@ -48,6 +52,7 @@ export default function StorePage() {
               originalPrice: 100.0,
               customerMenuPrice: 105.0,
               category: 'Main Course',
+              image: 'https://images.unsplash.com/photo-1631452180519-c014fe946bc7?w=300&q=80',
             },
             {
               id: 'prod-102',
@@ -56,6 +61,7 @@ export default function StorePage() {
               originalPrice: 200.0,
               customerMenuPrice: 210.0,
               category: 'Biryani & Rice',
+              image: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=300&q=80',
             },
             {
               id: 'prod-103',
@@ -64,6 +70,7 @@ export default function StorePage() {
               originalPrice: 40.0,
               customerMenuPrice: 42.0,
               category: 'Breads',
+              image: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?w=300&q=80',
             },
             {
               id: 'prod-104',
@@ -72,6 +79,7 @@ export default function StorePage() {
               originalPrice: 60.0,
               customerMenuPrice: 63.0,
               category: 'Desserts',
+              image: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=300&q=80',
             },
           ]);
         }
@@ -96,8 +104,7 @@ export default function StorePage() {
         },
         vendor
       );
-      setFeedbackMsg(`Added ${product.name} to cart`);
-      setTimeout(() => setFeedbackMsg(''), 2000);
+      showToast(`Added ${product.name} to cart!`, 'success');
     } catch (err) {
       if (err.message.includes('Single vendor')) {
         setConflictModal({
@@ -105,7 +112,7 @@ export default function StorePage() {
           message: 'Your cart already contains items from another store. Quikooo enforces single-vendor delivery per order.',
         });
       } else {
-        alert(err.message);
+        showToast(err.message, 'error');
       }
     }
   }
@@ -124,19 +131,22 @@ export default function StorePage() {
       vendor
     );
     setConflictModal(null);
-    setFeedbackMsg(`Cart reset and added ${conflictModal.pendingProduct.name}`);
-    setTimeout(() => setFeedbackMsg(''), 2000);
+    showToast(`Cart reset to ${vendor?.name} & item added!`, 'success');
   }
 
   if (loading) {
     return (
-      <div className="page-content" style={{ textAlign: 'center', padding: '3rem' }}>
-        Loading store catalog...
+      <div className="page-content">
+        <SkeletonCard lines={2} style={{ marginBottom: '1rem' }} />
+        <div className="grid-cards">
+          <SkeletonCard lines={3} hasImage />
+          <SkeletonCard lines={3} hasImage />
+        </div>
       </div>
     );
   }
 
-  const isCurrentStoreInCart = cart.vendorId === id || !cart.vendorId;
+  const displayedProducts = products.slice(0, visibleCount);
 
   return (
     <div className="page-content">
@@ -156,6 +166,7 @@ export default function StorePage() {
             display: 'flex',
             alignItems: 'center',
             gap: '0.25rem',
+            minHeight: '44px',
           }}
         >
           ← Back to Stores
@@ -167,164 +178,208 @@ export default function StorePage() {
               {vendor?.businessType || 'RESTAURANT'}
             </span>
             <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#047857' }}>
-              ⚡ 10–15 Min Express
+              ⚡ {vendor?.etaMinutes || 12} Min Express (2.0 km geofence)
             </span>
           </div>
 
-          <h2 style={{ margin: '0.35rem 0 0.2rem 0', fontSize: '1.35rem' }}>
+          <h1 style={{ margin: '0.35rem 0 0.2rem 0', fontSize: '1.35rem', fontWeight: 700 }}>
             {vendor?.name}
-          </h2>
+          </h1>
           <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.8125rem', color: '#4B5563' }}>
             {vendor?.cuisine || 'Quality fresh food crafted for quick delivery'}
           </p>
 
-          <div style={{
-            fontSize: '0.75rem',
-            background: '#ecfdf5',
-            color: '#064e3b',
-            padding: '0.4rem 0.6rem',
-            borderRadius: '0.5rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.35rem',
-          }}>
+          <div
+            style={{
+              fontSize: '0.75rem',
+              background: '#ECFDF5',
+              color: '#064E3B',
+              padding: '0.4rem 0.6rem',
+              borderRadius: '0.5rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+            }}
+          >
             <span>ℹ️</span>
-            <span>Menu prices reflect +5% packaging & preparation adjustment.</span>
+            <span>Menu prices reflect transparent +5% packaging & preparation adjustment.</span>
           </div>
         </div>
       </div>
 
-      {feedbackMsg && (
-        <div style={{
-          background: '#d1fae5',
-          color: '#064e3b',
-          padding: '0.5rem 0.75rem',
-          borderRadius: '0.5rem',
-          marginBottom: '1rem',
-          fontSize: '0.8125rem',
-          fontWeight: 600,
-          textAlign: 'center',
-        }}>
-          ✓ {feedbackMsg}
-        </div>
-      )}
-
       {/* Menu Header */}
-      <h3 style={{ fontSize: '1.1rem', marginBottom: '0.75rem', fontWeight: 700 }}>
-        Store Menu & Catalog
-      </h3>
+      <div className="flex-row-between" style={{ marginBottom: '0.75rem' }}>
+        <h2 style={{ fontSize: '1.1rem', margin: 0, fontWeight: 700 }}>
+          Store Menu ({products.length})
+        </h2>
+        <span style={{ fontSize: '0.75rem', color: '#059669', fontWeight: 600 }}>Fresh Prepared</span>
+      </div>
 
-      {/* Product List */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
-        {products.map((product) => {
+      {/* Product Grid / List */}
+      <div className="grid-cards">
+        {displayedProducts.map((product) => {
           const cartItem = cart.items.find((i) => i.productId === product.id);
           const quantityInCart = cartItem ? cartItem.quantity : 0;
 
           return (
-            <div key={product.id} className="card" style={{ padding: '0.875rem' }}>
-              <div className="flex-row-between" style={{ alignItems: 'flex-start' }}>
-                <div style={{ flex: 1, paddingRight: '0.75rem' }}>
-                  <h4 style={{ margin: '0 0 0.25rem 0', fontSize: '1rem', color: '#111827' }}>
-                    {product.name}
-                  </h4>
-                  <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.75rem', color: '#6B7280' }}>
-                    {product.description}
-                  </p>
+            <div
+              key={product.id}
+              className="card"
+              style={{
+                padding: '0.875rem',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+              }}
+            >
+              <div>
+                {/* Lazy-loaded product image */}
+                <div
+                  style={{
+                    height: '120px',
+                    borderRadius: '0.5rem',
+                    overflow: 'hidden',
+                    marginBottom: '0.75rem',
+                    backgroundColor: '#E5E7EB',
+                  }}
+                >
+                  <img
+                    src={product.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300&q=80'}
+                    alt={product.name}
+                    loading="lazy"
+                    decoding="async"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                    }}
+                  />
+                </div>
 
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
-                    <span style={{
-                      fontSize: '1.05rem',
+                <h3 style={{ margin: '0 0 0.25rem 0', fontSize: '1rem', color: '#111827', fontWeight: 600 }}>
+                  {product.name}
+                </h3>
+                <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.75rem', color: '#6B7280', lineHeight: 1.4 }}>
+                  {product.description}
+                </p>
+
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                  <span
+                    style={{
+                      fontSize: '1.1rem',
                       fontWeight: 700,
                       color: '#059669',
                       fontFamily: 'var(--font-family-display)',
-                    }}>
-                      ₹{(product.customerMenuPrice || product.originalPrice * 1.05).toFixed(2)}
-                    </span>
-                    <span style={{
+                    }}
+                  >
+                    ₹{(product.customerMenuPrice || product.originalPrice * 1.05).toFixed(2)}
+                  </span>
+                  <span
+                    style={{
                       fontSize: '0.75rem',
                       color: '#9CA3AF',
                       textDecoration: 'line-through',
-                    }}>
-                      ₹{(product.originalPrice || 100).toFixed(2)}
-                    </span>
-                    <span className="badge badge-success" style={{ fontSize: '0.65rem', padding: '0.1rem 0.35rem' }}>
-                      +5%
-                    </span>
-                  </div>
+                    }}
+                  >
+                    ₹{(product.originalPrice || 100).toFixed(2)}
+                  </span>
+                  <span className="badge badge-success" style={{ fontSize: '0.65rem', padding: '0.1rem 0.35rem' }}>
+                    +5%
+                  </span>
                 </div>
+              </div>
 
-                {/* Add / Quantity Buttons */}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                  {quantityInCart > 0 ? (
-                    <div style={{
+              {/* Add / Quantity Buttons */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                {quantityInCart > 0 ? (
+                  <div
+                    style={{
                       display: 'flex',
                       alignItems: 'center',
                       background: '#059669',
                       borderRadius: '0.5rem',
                       overflow: 'hidden',
                       color: '#FFFFFF',
-                    }}>
-                      <button
-                        onClick={() => cart.updateQuantity(product.id, quantityInCart - 1)}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: '#FFFFFF',
-                          padding: '0.35rem 0.65rem',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        -
-                      </button>
-                      <span style={{ padding: '0 0.4rem', fontWeight: 600, fontSize: '0.85rem' }}>
-                        {quantityInCart}
-                      </span>
-                      <button
-                        onClick={() => handleAddToCart(product)}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: '#FFFFFF',
-                          padding: '0.35rem 0.65rem',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        +
-                      </button>
-                    </div>
-                  ) : (
+                      minHeight: '44px',
+                    }}
+                  >
                     <button
-                      className="btn-primary btn-sm"
-                      onClick={() => handleAddToCart(product)}
-                      style={{ padding: '0.4rem 1rem' }}
+                      onClick={() => cart.updateQuantity(product.id, quantityInCart - 1)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#FFFFFF',
+                        padding: '0.4rem 0.75rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        minHeight: '44px',
+                      }}
+                      aria-label="Decrease quantity"
                     >
-                      + ADD
+                      -
                     </button>
-                  )}
-                </div>
+                    <span style={{ padding: '0 0.4rem', fontWeight: 600, fontSize: '0.85rem' }}>
+                      {quantityInCart}
+                    </span>
+                    <button
+                      onClick={() => handleAddToCart(product)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#FFFFFF',
+                        padding: '0.4rem 0.75rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        minHeight: '44px',
+                      }}
+                      aria-label="Increase quantity"
+                    >
+                      +
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    className="btn-primary btn-sm"
+                    onClick={() => handleAddToCart(product)}
+                    style={{ padding: '0.5rem 1.25rem', minHeight: '44px' }}
+                  >
+                    + ADD
+                  </button>
+                )}
               </div>
             </div>
           );
         })}
       </div>
 
+      {/* Pagination / Limit Render: Load More */}
+      {products.length > visibleCount && (
+        <div style={{ textAlign: 'center', marginTop: '1.5rem' }}>
+          <button
+            onClick={() => setVisibleCount((prev) => prev + 20)}
+            className="btn-secondary"
+            style={{ minHeight: '44px', padding: '0.5rem 1.5rem' }}
+          >
+            Load More Items ({products.length - visibleCount} remaining)
+          </button>
+        </div>
+      )}
+
       {/* Single-Vendor Cart Conflict Modal */}
       {conflictModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 100,
-          padding: '1rem',
-        }}>
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 100,
+            padding: '1rem',
+          }}
+          role="dialog"
+          aria-modal="true"
+        >
           <div className="card" style={{ maxWidth: '380px', width: '100%', padding: '1.25rem' }}>
             <h3 style={{ color: '#991B1B', margin: '0 0 0.5rem 0', fontSize: '1.1rem' }}>
               Single Vendor Cart Only
@@ -337,12 +392,14 @@ export default function StorePage() {
               <button
                 className="btn-secondary btn-sm"
                 onClick={() => setConflictModal(null)}
+                style={{ minHeight: '44px' }}
               >
                 Keep Existing Cart
               </button>
               <button
                 className="btn-primary btn-sm"
                 onClick={handleSwitchStoreAndAdd}
+                style={{ minHeight: '44px' }}
               >
                 Reset & Add Item
               </button>
@@ -354,16 +411,18 @@ export default function StorePage() {
       {/* Floating Checkout Bar if items present */}
       {cart.itemCount > 0 && (
         <div className="floating-checkout-bar">
-          <div style={{
-            background: '#059669',
-            borderRadius: '0.75rem',
-            padding: '0.75rem 1rem',
-            color: '#FFFFFF',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            boxShadow: '0 8px 20px rgba(5, 150, 105, 0.4)',
-          }}>
+          <div
+            style={{
+              background: '#059669',
+              borderRadius: '0.75rem',
+              padding: '0.75rem 1rem',
+              color: '#FFFFFF',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              boxShadow: '0 8px 20px rgba(5, 150, 105, 0.4)',
+            }}
+          >
             <div>
               <div style={{ fontSize: '0.75rem', opacity: 0.9 }}>
                 {cart.itemCount} {cart.itemCount === 1 ? 'item' : 'items'} in cart
@@ -380,9 +439,10 @@ export default function StorePage() {
                 border: 'none',
                 fontWeight: 700,
                 fontSize: '0.875rem',
-                padding: '0.5rem 1rem',
+                padding: '0.5rem 1.25rem',
                 borderRadius: '0.5rem',
                 cursor: 'pointer',
+                minHeight: '44px',
               }}
             >
               View Cart →

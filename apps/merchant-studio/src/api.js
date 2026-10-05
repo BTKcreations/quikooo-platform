@@ -2,9 +2,44 @@
  * QUIKOOO Merchant Studio API Client & State Machine Helpers
  * Connects to Express backend /api/v1
  * Source of Truth: docs/FULL-PLATFORM-PLAN.md & backend/src/services/OrderService.js
+ * 2026 Perf: 60s in-memory SWR cache for GET, debounce 300ms, never cache POST
  */
 
 const API_BASE = '/api/v1';
+
+/**
+ * In-memory 60s SWR Cache for GET requests
+ */
+const apiCache = new Map();
+const CACHE_TTL_MS = 60 * 1000;
+
+export function clearApiCache() {
+  apiCache.clear();
+}
+
+/**
+ * Standard debounce utility (300ms default)
+ */
+export function debounce(fn, delay = 300) {
+  let timer = null;
+  const debounced = function (...args) {
+    if (timer) clearTimeout(timer);
+    return new Promise((resolve) => {
+      timer = setTimeout(async () => {
+        try {
+          const result = await fn.apply(this, args);
+          resolve(result);
+        } catch {
+          resolve(null);
+        }
+      }, delay);
+    });
+  };
+  debounced.cancel = () => {
+    if (timer) clearTimeout(timer);
+  };
+  return debounced;
+}
 
 /**
  * Valid kitchen state progression per OrderService state machine:
@@ -27,7 +62,7 @@ export const TRANSITION_LABELS = {
   },
   VENDOR_ACCEPTED: {
     next: 'PREPARING',
-    label: 'Start Preparing',
+    label: 'Start Cooking',
     btnClass: 'btn-primary',
   },
   PREPARING: {
@@ -44,10 +79,6 @@ export const TRANSITION_LABELS = {
 
 /**
  * Validates and builds payload for order state transition
- * @param {string} currentStatus 
- * @param {string} nextStatus 
- * @param {string} [notes]
- * @returns {{ currentStatus: string, nextStatus: string, notes: string }}
  */
 export function buildTransitionPayload(currentStatus, nextStatus, notes = '') {
   if (!currentStatus || !nextStatus) {
@@ -68,14 +99,38 @@ export function buildTransitionPayload(currentStatus, nextStatus, notes = '') {
 }
 
 /**
+ * Builds prep time selector payload for kitchen acceptance
+ */
+export function buildPrepTimePayload(orderId, prepMinutes = 15) {
+  const mins = Number(prepMinutes) || 15;
+  return {
+    orderId,
+    prepMinutes: mins,
+    estimatedReadyAt: new Date(Date.now() + mins * 60 * 1000).toISOString(),
+    notes: `Estimated preparation time: ${mins} minutes`,
+  };
+}
+
+/**
+ * Stock item toggle helper for merchant menu manager
+ */
+export const INITIAL_MENU_ITEMS = [
+  { id: 'item-1', name: 'Special Chicken Biryani Feast', price: 100, customerPrice: 105, inStock: true, category: 'Main Course' },
+  { id: 'item-2', name: 'Paneer Butter Masala', price: 100, customerPrice: 105, inStock: true, category: 'Main Course' },
+  { id: 'item-3', name: 'Garlic Butter Naan', price: 40, customerPrice: 42, inStock: true, category: 'Breads' },
+  { id: 'item-4', name: 'Dal Makhani', price: 80, customerPrice: 84, inStock: true, category: 'Main Course' },
+  { id: 'item-5', name: 'Gulab Jamun (2 Pcs)', price: 60, customerPrice: 63, inStock: false, category: 'Desserts' },
+];
+
+export function toggleItemStock(items, itemId) {
+  return items.map((it) => (it.id === itemId ? { ...it, inStock: !it.inStock } : it));
+}
+
+/**
  * Official Canonical Settlement Math (Single Source of Truth)
  * Example: Original Price = ₹100.00
  * Platform Commission (10%) = ₹10.00 (calculated strictly on original price)
  * Vendor Settlement = ₹90.00 (₹100.00 - ₹10.00)
- * 
- * @param {number|object} input - Original price or options object { originalPrice, commissionPercent }
- * @param {number} [commissionPercent=10]
- * @returns {{ originalPrice: number, commissionPercent: number, commissionAmount: number, vendorSettlement: number }}
  */
 export function calculateSettlement(input, commissionPercent = 10) {
   let original = 0;
@@ -101,14 +156,47 @@ export function calculateSettlement(input, commissionPercent = 10) {
 }
 
 /**
- * Standard fetch helper with JSON parsing and error wrapping
+ * Standard fetch helper with JSON parsing, error wrapping, and SWR caching for GET
  */
 async function apiFetch(endpoint, options = {}) {
+  const method = (options.method || 'GET').toUpperCase();
   const headers = {
     'Content-Type': 'application/json',
     ...(options.headers || {}),
   };
 
+  // SWR Caching for GET requests
+  if (method === 'GET') {
+    const cached = apiCache.get(endpoint);
+    const now = Date.now();
+    if (cached) {
+      if (now - cached.timestamp < CACHE_TTL_MS) {
+        return cached.data;
+      }
+      // Revalidate in background
+      fetch(`${API_BASE}${endpoint}`, { ...options, headers })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((fresh) => {
+          if (fresh) apiCache.set(endpoint, { data: fresh, timestamp: Date.now() });
+        })
+        .catch(() => {});
+      return cached.data;
+    }
+
+    const res = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const errorMsg = json.message || `Request failed with status ${res.status}`;
+      const err = new Error(errorMsg);
+      err.status = res.status;
+      err.data = json;
+      throw err;
+    }
+    apiCache.set(endpoint, { data: json, timestamp: Date.now() });
+    return json;
+  }
+
+  // Non-GET requests: NEVER CACHED
   const res = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
     headers,
@@ -128,7 +216,7 @@ async function apiFetch(endpoint, options = {}) {
 
 /**
  * Fetch vendors list (Stub tolerant)
- * GET /api/v1/vendors
+ * GET /api/v1/vendors (Cached 60s)
  */
 export async function getVendors() {
   try {
@@ -140,7 +228,6 @@ export async function getVendors() {
     console.warn('[Merchant API] GET /vendors fallback to stub:', err.message);
   }
 
-  // Default fallback merchant store
   return [
     {
       id: 'vendor-sample-1',
@@ -191,6 +278,7 @@ export async function getOrders(vendorId = 'vendor-sample-1') {
       status: 'ORDER_PLACED',
       placedAt: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
       pickupOtp: '4512',
+      prepMinutes: 15,
     },
     {
       id: 'ord-102',
@@ -209,6 +297,7 @@ export async function getOrders(vendorId = 'vendor-sample-1') {
       status: 'VENDOR_ACCEPTED',
       placedAt: new Date(Date.now() - 8 * 60 * 1000).toISOString(),
       pickupOtp: '7823',
+      prepMinutes: 12,
     },
     {
       id: 'ord-103',
@@ -227,6 +316,7 @@ export async function getOrders(vendorId = 'vendor-sample-1') {
       status: 'PREPARING',
       placedAt: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
       pickupOtp: '9102',
+      prepMinutes: 20,
     },
     {
       id: 'ord-104',
@@ -245,18 +335,14 @@ export async function getOrders(vendorId = 'vendor-sample-1') {
       status: 'READY_FOR_PICKUP',
       placedAt: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
       pickupOtp: '3341',
+      prepMinutes: 15,
     },
   ];
 }
 
 /**
  * Execute Order State Transition
- * POST /api/v1/orders/:id/transition (Stub tolerant if 404)
- * 
- * @param {string} orderId 
- * @param {string} currentStatus 
- * @param {string} nextStatus 
- * @param {string} [notes]
+ * POST /api/v1/orders/:id/transition (Stub tolerant) - NEVER CACHED
  */
 export async function transitionOrder(orderId, currentStatus, nextStatus, notes = '') {
   const payload = buildTransitionPayload(currentStatus, nextStatus, notes);
@@ -274,7 +360,6 @@ export async function transitionOrder(orderId, currentStatus, nextStatus, notes 
     console.warn(`[Merchant API] POST /orders/${orderId}/transition failed (${err.message}). Using stub fallback.`);
   }
 
-  // Stub-tolerant fallback return
   return {
     orderId,
     previousStatus: currentStatus,

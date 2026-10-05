@@ -35,14 +35,49 @@ export function calculateBreakdown(items, overrides = {}) {
 }
 
 /**
- * Cart Store implementation with Single Vendor enforcement
+ * Cart Store implementation with Single Vendor enforcement and LocalStorage persistence
  */
 export class CartStore {
   constructor(initialState = {}) {
-    this.items = initialState.items || [];
-    this.vendorId = initialState.vendorId || null;
-    this.vendorName = initialState.vendorName || null;
+    let savedState = {};
+    if (typeof localStorage !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('quikooo_customer_cart');
+        if (raw) {
+          savedState = JSON.parse(raw);
+        }
+      } catch {
+        // Storage access error ignored
+      }
+    }
+
+    this.items = initialState.items !== undefined ? initialState.items : (savedState.items || []);
+    this.vendorId = initialState.vendorId !== undefined ? initialState.vendorId : (savedState.vendorId || null);
+    this.vendorName = initialState.vendorName !== undefined ? initialState.vendorName : (savedState.vendorName || null);
     this.listeners = new Set();
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', () => {
+        this.notify();
+      });
+    }
+  }
+
+  persist() {
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem(
+          'quikooo_customer_cart',
+          JSON.stringify({
+            items: this.items,
+            vendorId: this.vendorId,
+            vendorName: this.vendorName,
+          })
+        );
+      } catch {
+        // Storage write error ignored
+      }
+    }
   }
 
   subscribe(listener) {
@@ -51,6 +86,7 @@ export class CartStore {
   }
 
   notify() {
+    this.persist();
     for (const listener of this.listeners) {
       listener(this.getState());
     }
@@ -142,6 +178,14 @@ export class CartStore {
     return this.getState();
   }
 
+  reorder(items, vendor) {
+    this.clearCart();
+    for (const item of items) {
+      this.addItem(item, vendor);
+    }
+    return this.getState();
+  }
+
   calculate() {
     return calculateBreakdown(this.items);
   }
@@ -173,6 +217,7 @@ export function useCart() {
     removeItem: (productId) => cart.removeItem(productId),
     updateQuantity: (productId, qty) => cart.updateQuantity(productId, qty),
     clearCart: () => cart.clearCart(),
+    reorder: (items, vendor) => cart.reorder(items, vendor),
     calculate: () => cart.calculate(),
   };
 }

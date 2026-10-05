@@ -10,10 +10,13 @@ export default function DriversPage() {
   const [toastMsg, setToastMsg] = useState('');
 
   // Form State
+  const [wizardStep, setWizardStep] = useState(1);
   const [form, setForm] = useState({
     name: '',
     phone: '',
     vehicle: 'Hero Splendor (KA-11-E-4512)',
+    licenseNumber: '',
+    upiId: '',
   });
 
   useEffect(() => {
@@ -61,12 +64,15 @@ export default function DriversPage() {
         name: form.name.trim(),
         phone: form.phone.trim(),
         vehicle: form.vehicle.trim(),
+        licenseNumber: form.licenseNumber.trim(),
+        upiId: form.upiId.trim(),
         zoneId: 'zone-rural-1',
       });
 
       setDrivers((prev) => [created, ...prev.filter((d) => d.id !== created.id)]);
       setShowModal(false);
-      setForm({ name: '', phone: '', vehicle: '' });
+      setWizardStep(1);
+      setForm({ name: '', phone: '', vehicle: '', licenseNumber: '', upiId: '' });
       showToast(`🎉 Driver ${created.name} registered to fleet!`);
     } catch (err) {
       alert(`Onboard error: ${err.message}`);
@@ -268,70 +274,161 @@ export default function DriversPage() {
               </button>
             </div>
 
-            <form onSubmit={handleOnboardSubmit}>
-              <div className="form-group">
-                <label className="form-label">Rider Full Name *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Praveen Kumar Gowda"
-                  className="form-input"
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Phone Number *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="+91 99160 44556"
-                  className="form-input"
-                  value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Vehicle Type & Registration Plate *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Hero Splendor Plus (KA-11-Q-7788)"
-                  className="form-input"
-                  value={form.vehicle}
-                  onChange={(e) => setForm({ ...form, vehicle: e.target.value })}
-                />
-              </div>
-
-              <div
+            {/* Step Wizard Header */}
+            <div style={{ display: 'flex', borderBottom: '1px solid #E5E7EB', marginBottom: '1.25rem', gap: '0.5rem' }}>
+              <button
+                type="button"
+                onClick={() => setWizardStep(1)}
                 style={{
-                  backgroundColor: '#EFF6FF',
-                  border: '1px solid #BFDBFE',
-                  padding: '0.75rem',
-                  borderRadius: '0.5rem',
-                  fontSize: '0.8rem',
-                  color: '#1E40AF',
-                  marginBottom: '1.25rem',
+                  padding: '0.5rem 1rem',
+                  fontWeight: 600,
+                  fontSize: '0.85rem',
+                  border: 'none',
+                  background: 'none',
+                  cursor: 'pointer',
+                  borderBottom: wizardStep === 1 ? '2px solid #059669' : '2px solid transparent',
+                  color: wizardStep === 1 ? '#059669' : '#6B7280',
                 }}
               >
-                <strong>Logistics Agreement:</strong> Rider is credited flat ₹25.00 per completed delivery upon verified two-step OTP handshake. Payouts can be withdrawn daily.
-              </div>
+                1. Rider Profile & Vehicle
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (form.name && form.phone && form.vehicle) setWizardStep(2);
+                }}
+                style={{
+                  padding: '0.5rem 1rem',
+                  fontWeight: 600,
+                  fontSize: '0.85rem',
+                  border: 'none',
+                  background: 'none',
+                  cursor: 'pointer',
+                  borderBottom: wizardStep === 2 ? '2px solid #059669' : '2px solid transparent',
+                  color: wizardStep === 2 ? '#059669' : '#6B7280',
+                }}
+              >
+                2. KYC & Payout Details
+              </button>
+            </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => setShowModal(false)}
-                  disabled={submitting}
-                >
-                  Cancel
-                </button>
-                <button type="submit" className="btn-primary" disabled={submitting}>
-                  {submitting ? 'Registering...' : 'Register Rider'}
-                </button>
-              </div>
+            <form onSubmit={handleOnboardSubmit}>
+              {wizardStep === 1 ? (
+                <div>
+                  <div className="form-group">
+                    <label className="form-label">Rider Full Name *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Praveen Kumar Gowda"
+                      className="form-input"
+                      value={form.name}
+                      onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Phone Number *</label>
+                    <input
+                      type="tel"
+                      required
+                      placeholder="+91 99160 44556"
+                      className="form-input"
+                      value={form.phone}
+                      onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Vehicle Type & Registration Plate *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Hero Splendor Plus (KA-11-Q-7788)"
+                      className="form-input"
+                      value={form.vehicle}
+                      onChange={(e) => setForm({ ...form, vehicle: e.target.value })}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.25rem' }}>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => setShowModal(false)}
+                      style={{ minHeight: '44px' }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      onClick={() => {
+                        if (form.name && form.phone && form.vehicle) {
+                          setWizardStep(2);
+                        } else {
+                          alert('Please enter Rider Name, Phone Number, and Vehicle details');
+                        }
+                      }}
+                      style={{ minHeight: '44px', padding: '0.5rem 1.25rem' }}
+                    >
+                      Next: KYC & UPI →
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div className="form-group">
+                    <label className="form-label">Driving License Number</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. KA-11-20210004567"
+                      className="form-input"
+                      value={form.licenseNumber}
+                      onChange={(e) => setForm({ ...form, licenseNumber: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Direct UPI Payout ID (for ₹25/order logistics credit)</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. praveen@okhdfcbank"
+                      className="form-input"
+                      value={form.upiId}
+                      onChange={(e) => setForm({ ...form, upiId: e.target.value })}
+                    />
+                  </div>
+
+                  <div
+                    style={{
+                      backgroundColor: '#EFF6FF',
+                      border: '1px solid #BFDBFE',
+                      padding: '0.75rem',
+                      borderRadius: '0.5rem',
+                      fontSize: '0.8rem',
+                      color: '#1E40AF',
+                      marginBottom: '1.25rem',
+                    }}
+                  >
+                    <strong>Logistics Agreement:</strong> Rider is credited flat ₹25.00 per completed delivery upon verified two-step OTP handshake. Payouts can be withdrawn daily.
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => setWizardStep(1)}
+                      style={{ minHeight: '44px' }}
+                    >
+                      ← Back
+                    </button>
+                    <button type="submit" className="btn-primary" disabled={submitting} style={{ minHeight: '44px' }}>
+                      {submitting ? 'Registering...' : 'Register Rider'}
+                    </button>
+                  </div>
+                </div>
+              )}
             </form>
           </div>
         </div>

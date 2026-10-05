@@ -2,15 +2,30 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useCart } from '../store/cart.js';
 import { calculateOrder, createOrder } from '../api.js';
+import { useToast } from '../components/Toast.jsx';
+
+const ADDRESSES = [
+  { id: 'addr-indiranagar-01', label: 'Home', address: 'Flat 302, Palm Grove, 100ft Rd, Indiranagar', city: 'Bengaluru' },
+  { id: 'addr-koramangala-02', label: 'Work', address: 'Quikooo Tech Hub, 4th Block, Koramangala', city: 'Bengaluru' },
+];
+
+const SLOTS = [
+  { id: 'instant', label: '⚡ Instant Delivery', time: '10–15 mins', tag: 'Fastest' },
+  { id: 'evening', label: '🌆 Evening Slot', time: '7:00 PM – 8:00 PM', tag: 'Scheduled' },
+  { id: 'morning', label: '🌅 Tomorrow Batch', time: '05:00 AM – 08:00 AM', tag: 'Rural' },
+];
 
 export default function CartPage() {
   const navigate = useNavigate();
   const cart = useCart();
+  const { showToast } = useToast();
 
   const [calculation, setCalculation] = useState(null);
   const [calculating, setCalculating] = useState(false);
   const [placingOrder, setPlacingOrder] = useState(false);
   const [error, setError] = useState(null);
+  const [selectedAddressId, setSelectedAddressId] = useState(ADDRESSES[0].id);
+  const [selectedSlot, setSelectedSlot] = useState(SLOTS[0].id);
   const [paymentMethod, setPaymentMethod] = useState('UPI');
 
   // Trigger server-authoritative calculation via POST /api/v1/orders/calculate
@@ -27,13 +42,12 @@ export default function CartPage() {
         const result = await calculateOrder({
           vendorId: cart.vendorId || 'vendor-sample-1',
           items: cart.items,
-          addressId: 'addr-indiranagar-01',
-          zoneType: 'URBAN',
+          addressId: selectedAddressId,
+          zoneType: selectedSlot === 'morning' ? 'RURAL' : 'URBAN',
         });
         setCalculation(result);
       } catch (err) {
         console.warn('Backend calculate API unavailable or returned error, using local breakdown:', err.message);
-        // Seamless fallback to client calculation
         setCalculation(cart.breakdown);
       } finally {
         setCalculating(false);
@@ -41,7 +55,7 @@ export default function CartPage() {
     }
 
     fetchServerCalculation();
-  }, [cart.items, cart.vendorId]);
+  }, [cart.items, cart.vendorId, selectedAddressId, selectedSlot]);
 
   async function handlePlaceOrder() {
     try {
@@ -56,9 +70,10 @@ export default function CartPage() {
           originalPrice: it.originalPrice,
           quantity: it.quantity,
         })),
-        addressId: 'addr-indiranagar-01',
+        addressId: selectedAddressId,
         paymentMethod,
-        zoneType: 'URBAN',
+        slotId: selectedSlot,
+        zoneType: selectedSlot === 'morning' ? 'RURAL' : 'URBAN',
       };
 
       let placedOrder;
@@ -74,12 +89,13 @@ export default function CartPage() {
         };
       }
 
-      // Clear cart on successful order creation
       cart.clearCart();
+      showToast('🎉 Order placed successfully!', 'success');
       const orderId = placedOrder?.id || placedOrder?.orderNumber || 'demo-order-1';
       navigate(`/orders?success=1&id=${orderId}`);
     } catch (err) {
       setError(err.message || 'Failed to place order');
+      showToast(err.message || 'Failed to place order', 'error');
     } finally {
       setPlacingOrder(false);
     }
@@ -87,20 +103,20 @@ export default function CartPage() {
 
   if (cart.items.length === 0) {
     return (
-      <div className="page-content" style={{ textAlign: 'center', padding: '3rem 1rem' }}>
-        <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🛒</div>
-        <h2 style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>Your Cart is Empty</h2>
-        <p style={{ fontSize: '0.875rem', color: '#6B7280', marginBottom: '1.5rem' }}>
-          Explore local stores in your 2km geofence and enjoy 10-15 min express delivery.
+      <div className="page-content" style={{ textAlign: 'center', padding: '3.5rem 1rem' }}>
+        <div style={{ fontSize: '3.5rem', marginBottom: '1rem' }}>🛒</div>
+        <h2 style={{ fontSize: '1.25rem', marginBottom: '0.5rem', color: '#111827' }}>Your Cart is Empty</h2>
+        <p style={{ fontSize: '0.875rem', color: '#6B7280', marginBottom: '1.5rem', maxWidth: '340px', margin: '0 auto 1.5rem auto' }}>
+          Explore nearby kitchens and stores within your 2.0 km geofence with 10-15m express delivery.
         </p>
-        <Link to="/customer" className="btn-primary" style={{ display: 'inline-block' }}>
+        <Link to="/customer" className="btn-primary" style={{ minHeight: '44px', display: 'inline-flex', padding: '0.6rem 1.5rem' }}>
           Browse Local Stores
         </Link>
       </div>
     );
   }
 
-  // Active calculation data: backend authoritative or client fallback
+  // Active calculation data
   const breakdown = calculation || cart.breakdown;
   const originalPrice = breakdown.originalPrice || 0;
   const menuAdjustmentAmount = breakdown.menuAdjustmentAmount || 0;
@@ -113,11 +129,17 @@ export default function CartPage() {
 
   return (
     <div className="page-content">
+      {/* Header */}
       <div className="flex-row-between" style={{ marginBottom: '1rem' }}>
-        <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Review Your Order</h2>
+        <div>
+          <h1 style={{ fontSize: '1.25rem', margin: 0, fontWeight: 700 }}>Single-Screen Checkout</h1>
+          <span style={{ fontSize: '0.75rem', color: '#059669', fontWeight: 600 }}>
+            Store: {cart.vendorName || 'Partner Kitchen'}
+          </span>
+        </div>
         <button
           onClick={() => cart.clearCart()}
-          style={{ background: 'none', border: 'none', color: '#EF4444', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600 }}
+          style={{ background: 'none', border: 'none', color: '#EF4444', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600, minHeight: '44px' }}
         >
           Clear Cart
         </button>
@@ -129,205 +151,276 @@ export default function CartPage() {
         </div>
       )}
 
-      {/* Cart Items List */}
-      <div className="card" style={{ marginBottom: '1rem', padding: '0.875rem' }}>
-        <div style={{ fontSize: '0.75rem', color: '#059669', fontWeight: 700, textTransform: 'uppercase', marginBottom: '0.5rem' }}>
-          Ordering from: {cart.vendorName || 'Single Vendor Partner'}
-        </div>
-
-        {cart.items.map((item) => (
-          <div
-            key={item.productId}
-            className="flex-row-between"
-            style={{
-              padding: '0.6rem 0',
-              borderBottom: '1px solid #F3F4F0',
-            }}
-          >
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>{item.name}</div>
-              <div style={{ fontSize: '0.75rem', color: '#6B7280' }}>
-                ₹{((item.originalPrice || 100) * 1.05).toFixed(2)} each (Orig: ₹{(item.originalPrice || 100).toFixed(2)})
-              </div>
+      {/* Responsive layout: 1 col on mobile, 2 cols on md/lg */}
+      <div className="grid-cards" style={{ alignItems: 'flex-start' }}>
+        {/* Left Column: Address + Slot + Items + Payment */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {/* 1. Address Selection */}
+          <div className="card" style={{ padding: '1rem' }}>
+            <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#374151', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+              📍 1. Delivery Address (2.0 km Geofence)
             </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                border: '1px solid #059669',
-                borderRadius: '0.375rem',
-                overflow: 'hidden',
-              }}>
-                <button
-                  onClick={() => cart.updateQuantity(item.productId, item.quantity - 1)}
-                  style={{ background: 'none', border: 'none', padding: '0.2rem 0.5rem', cursor: 'pointer', color: '#059669' }}
-                >
-                  -
-                </button>
-                <span style={{ fontSize: '0.8rem', fontWeight: 700, padding: '0 0.3rem' }}>
-                  {item.quantity}
-                </span>
-                <button
-                  onClick={() => cart.updateQuantity(item.productId, item.quantity + 1)}
-                  style={{ background: 'none', border: 'none', padding: '0.2rem 0.5rem', cursor: 'pointer', color: '#059669' }}
-                >
-                  +
-                </button>
-              </div>
-
-              <div style={{ minWidth: '4.5rem', textAlign: 'right', fontWeight: 700, fontSize: '0.95rem' }}>
-                ₹{((item.originalPrice || 100) * 1.05 * item.quantity).toFixed(2)}
-              </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {ADDRESSES.map((addr) => {
+                const isSelected = selectedAddressId === addr.id;
+                return (
+                  <button
+                    key={addr.id}
+                    onClick={() => setSelectedAddressId(addr.id)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '0.6rem 0.85rem',
+                      borderRadius: '0.5rem',
+                      border: isSelected ? '1.5px solid #059669' : '1px solid #E5E7EB',
+                      backgroundColor: isSelected ? '#ECFDF5' : '#FFFFFF',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      minHeight: '44px',
+                    }}
+                  >
+                    <div>
+                      <span style={{ fontWeight: 700, fontSize: '0.85rem', color: isSelected ? '#065F46' : '#111827' }}>
+                        {addr.label}
+                      </span>
+                      <div style={{ fontSize: '0.75rem', color: '#4B5563' }}>
+                        {addr.address}
+                      </div>
+                    </div>
+                    {isSelected && <span style={{ color: '#059669', fontWeight: 800 }}>✓</span>}
+                  </button>
+                );
+              })}
             </div>
           </div>
-        ))}
-      </div>
 
-      {/* Delivery Destination Card */}
-      <div className="card" style={{ marginBottom: '1rem', padding: '0.875rem' }}>
-        <div className="flex-row-between">
-          <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#111827' }}>
-            📍 Delivery Address
-          </span>
-          <span className="badge badge-success">10–15 MINS</span>
-        </div>
-        <div style={{ fontSize: '0.8125rem', color: '#4B5563', marginTop: '0.25rem' }}>
-          Indiranagar 100ft Road, Bangalore • Urban Cluster (2km Radius)
-        </div>
-      </div>
-
-      {/* Bill & Official Calculation Breakdown (100 -> 135 Model) */}
-      <div className="card" style={{ marginBottom: '1.25rem', padding: '1rem' }}>
-        <div className="flex-row-between" style={{ marginBottom: '0.75rem' }}>
-          <h3 style={{ fontSize: '1rem', margin: 0, fontWeight: 700 }}>
-            Bill Details & Transparent Breakdown
-          </h3>
-          {calculating && (
-            <span style={{ fontSize: '0.75rem', color: '#059669' }}>Updating...</span>
-          )}
-        </div>
-
-        {/* 1. Original Listed Price */}
-        <div className="flex-row-between" style={{ fontSize: '0.85rem', padding: '0.25rem 0', color: '#4B5563' }}>
-          <span>Vendor Listed Price (Original)</span>
-          <span>₹{originalPrice.toFixed(2)}</span>
-        </div>
-
-        {/* 2. Menu Adjustment (+5%) */}
-        <div className="flex-row-between" style={{ fontSize: '0.85rem', padding: '0.25rem 0', color: '#047857' }}>
-          <span>Menu Adjustment (+5% Packaging & Prep)</span>
-          <span>+₹{menuAdjustmentAmount.toFixed(2)}</span>
-        </div>
-
-        {/* 3. Customer Menu Price / Subtotal */}
-        <div className="flex-row-between" style={{ fontSize: '0.9rem', fontWeight: 600, padding: '0.35rem 0', borderTop: '1px dashed #E5E7EB', borderBottom: '1px dashed #E5E7EB', margin: '0.25rem 0' }}>
-          <span>Order Subtotal (Customer Menu Price)</span>
-          <span>₹{customerMenuPrice.toFixed(2)}</span>
-        </div>
-
-        {/* 4. Platform Fee (₹5) */}
-        <div className="flex-row-between" style={{ fontSize: '0.85rem', padding: '0.25rem 0', color: '#4B5563' }}>
-          <span>Platform Convenience Fee</span>
-          <span>+₹{platformFee.toFixed(2)}</span>
-        </div>
-
-        {/* 5. Delivery Logistics Fee (₹25) */}
-        <div className="flex-row-between" style={{ fontSize: '0.85rem', padding: '0.25rem 0', color: '#4B5563' }}>
-          <span>Delivery Logistics Fee (100% to Driver)</span>
-          <span>+₹{deliveryFee.toFixed(2)}</span>
-        </div>
-
-        {/* 6. Customer Total Payable */}
-        <div className="flex-row-between" style={{
-          fontSize: '1.15rem',
-          fontWeight: 800,
-          color: '#059669',
-          paddingTop: '0.6rem',
-          marginTop: '0.4rem',
-          borderTop: '2px solid #059669',
-          fontFamily: 'var(--font-family-display)',
-        }}>
-          <span>Total Customer Payable</span>
-          <span>₹{customerPayable.toFixed(2)}</span>
-        </div>
-
-        {/* Transparency Settlement Breakdown (Canonical Phase 1/2) */}
-        <div style={{
-          marginTop: '1rem',
-          background: '#F9FAFB',
-          border: '1px solid #E5E7EB',
-          borderRadius: '0.5rem',
-          padding: '0.75rem',
-          fontSize: '0.75rem',
-          color: '#4B5563',
-        }}>
-          <div style={{ fontWeight: 700, color: '#111827', marginBottom: '0.35rem' }}>
-            🔍 Economic Transparency (Official Model)
+          {/* 2. Delivery Slot Selection */}
+          <div className="card" style={{ padding: '1rem' }}>
+            <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#374151', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+              ⏱️ 2. Delivery Window
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.5rem' }}>
+              {SLOTS.map((slot) => {
+                const isSelected = selectedSlot === slot.id;
+                return (
+                  <button
+                    key={slot.id}
+                    onClick={() => setSelectedSlot(slot.id)}
+                    style={{
+                      padding: '0.6rem 0.75rem',
+                      borderRadius: '0.5rem',
+                      border: isSelected ? '1.5px solid #059669' : '1px solid #E5E7EB',
+                      backgroundColor: isSelected ? '#ECFDF5' : '#FFFFFF',
+                      cursor: 'pointer',
+                      textAlign: 'center',
+                      minHeight: '44px',
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, fontSize: '0.8rem', color: isSelected ? '#065F46' : '#111827' }}>
+                      {slot.label}
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: '#059669', fontWeight: 600 }}>
+                      {slot.time}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-          <div className="flex-row-between" style={{ padding: '0.15rem 0' }}>
-            <span>Merchant Net Settlement (Original - 10% Comm):</span>
-            <span style={{ fontWeight: 600, color: '#111827' }}>₹{vendorSettlement.toFixed(2)}</span>
+
+          {/* 3. Items in Cart */}
+          <div className="card" style={{ padding: '1rem' }}>
+            <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#374151', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+              🧺 3. Order Items ({cart.itemCount})
+            </div>
+            {cart.items.map((item) => (
+              <div
+                key={item.productId}
+                className="flex-row-between"
+                style={{ padding: '0.5rem 0', borderBottom: '1px solid #F3F4F0' }}
+              >
+                <div style={{ flex: 1, minWidth: 0, paddingRight: '0.5rem' }}>
+                  <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#111827' }}>
+                    {item.name}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: '#6B7280' }}>
+                    ₹{((item.originalPrice || 100) * 1.05).toFixed(2)} each (Orig: ₹{(item.originalPrice || 100).toFixed(2)})
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      border: '1px solid #059669',
+                      borderRadius: '0.375rem',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <button
+                      onClick={() => cart.updateQuantity(item.productId, item.quantity - 1)}
+                      style={{ background: 'none', border: 'none', padding: '0.2rem 0.5rem', cursor: 'pointer', color: '#059669', minHeight: '32px' }}
+                      aria-label="Decrease quantity"
+                    >
+                      -
+                    </button>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 700, padding: '0 0.35rem' }}>
+                      {item.quantity}
+                    </span>
+                    <button
+                      onClick={() => cart.updateQuantity(item.productId, item.quantity + 1)}
+                      style={{ background: 'none', border: 'none', padding: '0.2rem 0.5rem', cursor: 'pointer', color: '#059669', minHeight: '32px' }}
+                      aria-label="Increase quantity"
+                    >
+                      +
+                    </button>
+                  </div>
+
+                  <div style={{ minWidth: '4rem', textAlign: 'right', fontWeight: 700, fontSize: '0.9rem' }}>
+                    ₹{((item.originalPrice || 100) * 1.05 * item.quantity).toFixed(2)}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
-          <div className="flex-row-between" style={{ padding: '0.15rem 0' }}>
-            <span>Quikooo Gross Revenue (5% Markup + 10% Comm):</span>
-            <span style={{ fontWeight: 600, color: '#059669' }}>₹{quikoooGrossRevenue.toFixed(2)}</span>
-          </div>
-          <div className="flex-row-between" style={{ padding: '0.15rem 0' }}>
-            <span>Delivery Partner Payout (100% of Delivery Fee):</span>
-            <span style={{ fontWeight: 600, color: '#111827' }}>₹{deliveryFee.toFixed(2)}</span>
+
+          {/* 4. Payment Method */}
+          <div className="card" style={{ padding: '1rem' }}>
+            <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#374151', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+              💳 4. Payment Method
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              {[
+                { id: 'UPI', label: 'UPI / GPay / PhonePe / Paytm', badge: 'Instant & Zero Fee' },
+                { id: 'COD', label: 'Cash on Delivery (Pay upon delivery)', badge: 'Available' },
+                { id: 'CARD', label: 'Credit / Debit Cards & Net Banking', badge: 'Secure' },
+              ].map((p) => {
+                const isSelected = paymentMethod === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => setPaymentMethod(p.id)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '0.6rem 0.85rem',
+                      borderRadius: '0.5rem',
+                      border: isSelected ? '1.5px solid #059669' : '1px solid #E5E7EB',
+                      backgroundColor: isSelected ? '#ECFDF5' : '#FFFFFF',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      minHeight: '44px',
+                    }}
+                  >
+                    <div>
+                      <span style={{ fontWeight: 600, fontSize: '0.85rem', color: isSelected ? '#065F46' : '#111827' }}>
+                        {p.label}
+                      </span>
+                    </div>
+                    <span style={{ fontSize: '0.7rem', color: isSelected ? '#059669' : '#6B7280', fontWeight: 600 }}>
+                      {p.badge}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Payment Selection */}
-      <div className="card" style={{ marginBottom: '1.25rem', padding: '0.875rem' }}>
-        <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem' }}>Select Payment Method</h4>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          {[
-            { id: 'UPI', label: '⚡ Instant UPI (Google Pay / PhonePe / Paytm)' },
-            { id: 'CARD', label: '💳 Credit / Debit Card' },
-            { id: 'COD', label: '💵 Cash on Delivery' },
-          ].map((m) => (
-            <label
-              key={m.id}
+        {/* Right Column: Sticky Summary & Transparent Breakdown */}
+        <div style={{ position: 'sticky', top: '4.5rem' }}>
+          <div className="card" style={{ padding: '1.25rem' }}>
+            <div className="flex-row-between" style={{ marginBottom: '0.75rem' }}>
+              <h3 style={{ fontSize: '1rem', margin: 0, fontWeight: 700 }}>
+                Transparent Fee Breakdown
+              </h3>
+              {calculating && <span style={{ fontSize: '0.75rem', color: '#059669' }}>Updating...</span>}
+            </div>
+
+            <div className="flex-row-between" style={{ fontSize: '0.85rem', padding: '0.25rem 0', color: '#4B5563' }}>
+              <span>Vendor Listed Price (Original)</span>
+              <span>₹{originalPrice.toFixed(2)}</span>
+            </div>
+
+            <div className="flex-row-between" style={{ fontSize: '0.85rem', padding: '0.25rem 0', color: '#047857' }}>
+              <span>Menu Adjustment (+5% Markup)</span>
+              <span>+₹{menuAdjustmentAmount.toFixed(2)}</span>
+            </div>
+
+            <div className="flex-row-between" style={{ fontSize: '0.9rem', fontWeight: 600, padding: '0.35rem 0', borderTop: '1px dashed #E5E7EB', borderBottom: '1px dashed #E5E7EB', margin: '0.35rem 0' }}>
+              <span>Customer Menu Price (Subtotal)</span>
+              <span>₹{customerMenuPrice.toFixed(2)}</span>
+            </div>
+
+            <div className="flex-row-between" style={{ fontSize: '0.85rem', padding: '0.25rem 0', color: '#4B5563' }}>
+              <span>Platform Fee</span>
+              <span>+₹{platformFee.toFixed(2)}</span>
+            </div>
+
+            <div className="flex-row-between" style={{ fontSize: '0.85rem', padding: '0.25rem 0', color: '#4B5563' }}>
+              <span>Delivery Logistics Fee (100% to Driver)</span>
+              <span>+₹{deliveryFee.toFixed(2)}</span>
+            </div>
+
+            <div
+              className="flex-row-between"
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                fontSize: '0.85rem',
-                cursor: 'pointer',
-                padding: '0.4rem',
-                borderRadius: '0.375rem',
-                background: paymentMethod === m.id ? '#ecfdf5' : 'transparent',
+                fontSize: '1.2rem',
+                fontWeight: 800,
+                color: '#059669',
+                paddingTop: '0.75rem',
+                marginTop: '0.5rem',
+                borderTop: '2px solid #059669',
+                fontFamily: 'var(--font-family-display, Outfit)',
               }}
             >
-              <input
-                type="radio"
-                name="payment"
-                value={m.id}
-                checked={paymentMethod === m.id}
-                onChange={() => setPaymentMethod(m.id)}
-              />
-              {m.label}
-            </label>
-          ))}
+              <span>Total Payable</span>
+              <span>₹{customerPayable.toFixed(2)}</span>
+            </div>
+
+            {/* Transparent Economic Disclosure */}
+            <div
+              style={{
+                marginTop: '1rem',
+                padding: '0.75rem',
+                backgroundColor: '#ECFDF5',
+                border: '1px solid #A7F3D0',
+                borderRadius: '0.5rem',
+                fontSize: '0.75rem',
+                color: '#065F46',
+                lineHeight: 1.45,
+              }}
+            >
+              <div style={{ fontWeight: 700, marginBottom: '0.2rem' }}>
+                ⚡ Full Fee Disclosure:
+              </div>
+              ₹{customerMenuPrice.toFixed(2)} food + ₹{platformFee.toFixed(2)} platform + ₹{deliveryFee.toFixed(2)} delivery = <strong>₹{customerPayable.toFixed(2)}</strong>.
+              <br />
+              • Vendor Settlement (90%): <strong>₹{vendorSettlement.toFixed(2)}</strong>
+              <br />
+              • Quikooo Gross Margin: <strong>₹{quikoooGrossRevenue.toFixed(2)}</strong>
+            </div>
+
+            {/* Place Order CTA */}
+            <button
+              onClick={handlePlaceOrder}
+              disabled={placingOrder}
+              className="btn-primary btn-block"
+              style={{
+                minHeight: '48px',
+                marginTop: '1.25rem',
+                fontSize: '1rem',
+                fontWeight: 700,
+              }}
+            >
+              {placingOrder ? 'Confirming Order...' : `Pay ₹${customerPayable.toFixed(2)} • Place Order`}
+            </button>
+          </div>
         </div>
       </div>
-
-      {/* Order CTA Button */}
-      <button
-        className="btn-primary btn-block"
-        onClick={handlePlaceOrder}
-        disabled={placingOrder}
-        style={{
-          padding: '0.875rem',
-          fontSize: '1.05rem',
-          fontFamily: 'var(--font-family-display)',
-        }}
-      >
-        {placingOrder ? 'Processing Order...' : `Pay ₹${customerPayable.toFixed(2)} & Place Order`}
-      </button>
     </div>
   );
 }

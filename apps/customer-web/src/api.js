@@ -1,14 +1,61 @@
 /**
  * QUIKOOO Customer Web API Client
  * Connects to Express backend /api/v1
+ * 2026 Perf: 60s In-Memory SWR Cache for GET / calculate, Debounce 300ms, Never Cache POST/.data
  */
 
 const API_BASE = '/api/v1';
 
 /**
- * Standard fetch wrapper with JSON handling & error propagation
+ * In-Memory Stale-While-Revalidate Cache
+ * TTL: 60 seconds (60000ms)
+ * Only caches GET requests and calculate lookups. NEVER caches POST order creation or state mutations.
+ */
+const inMemoryCache = new Map();
+const calculateCache = new Map();
+const CACHE_TTL_MS = 60 * 1000;
+
+export function clearApiCache() {
+  inMemoryCache.clear();
+  calculateCache.clear();
+}
+
+export function getCacheStats() {
+  return {
+    getCacheSize: inMemoryCache.size,
+    calculateCacheSize: calculateCache.size,
+  };
+}
+
+/**
+ * Standard debounce utility (300ms default)
+ */
+export function debounce(fn, delay = 300) {
+  let timer = null;
+  const debounced = function (...args) {
+    if (timer) clearTimeout(timer);
+    return new Promise((resolve) => {
+      timer = setTimeout(async () => {
+        try {
+          const result = await fn.apply(this, args);
+          resolve(result);
+        } catch (err) {
+          resolve(null);
+        }
+      }, delay);
+    });
+  };
+  debounced.cancel = () => {
+    if (timer) clearTimeout(timer);
+  };
+  return debounced;
+}
+
+/**
+ * Standard fetch wrapper with JSON handling, error propagation, and SWR caching for GET
  */
 async function apiRequest(endpoint, options = {}) {
+  const method = (options.method || 'GET').toUpperCase();
   const headers = {
     'Content-Type': 'application/json',
     ...(options.headers || {}),
@@ -19,6 +66,44 @@ async function apiRequest(endpoint, options = {}) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
+  // SWR Cache handling for GET requests only
+  if (method === 'GET') {
+    const cacheKey = `${endpoint}_${token || 'anon'}`;
+    const cached = inMemoryCache.get(cacheKey);
+    const now = Date.now();
+
+    if (cached) {
+      const isFresh = now - cached.timestamp < CACHE_TTL_MS;
+      if (isFresh) {
+        return cached.data;
+      }
+      // Stale-While-Revalidate: Return stale cached data immediately, revalidate in background
+      fetch(`${API_BASE}${endpoint}`, { ...options, headers })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((freshJson) => {
+          if (freshJson) {
+            inMemoryCache.set(cacheKey, { data: freshJson, timestamp: Date.now() });
+          }
+        })
+        .catch(() => {});
+      return cached.data;
+    }
+
+    const res = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const errorMsg = json.message || `Request failed with status ${res.status}`;
+      const err = new Error(errorMsg);
+      err.status = res.status;
+      err.data = json;
+      throw err;
+    }
+
+    inMemoryCache.set(cacheKey, { data: json, timestamp: Date.now() });
+    return json;
+  }
+
+  // Non-GET requests: NEVER CACHED
   const res = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
     headers,
@@ -39,21 +124,7 @@ async function apiRequest(endpoint, options = {}) {
 /**
  * Authoritative Server Money Calculation
  * POST /api/v1/orders/calculate
- * 
- * Response shape:
- * {
- *   originalPrice,
- *   menuAdjustmentAmount,
- *   customerMenuPrice,
- *   subtotal,
- *   commissionAmount,
- *   vendorSettlement,
- *   quikoooGrossRevenue,
- *   platformFee,
- *   deliveryFee,
- *   customerPayable,
- *   items
- * }
+ * Caches calculate responses in-memory for 60s by items fingerprint to provide zero-lag UI updates.
  */
 export async function calculateOrder({ vendorId, items, addressId = 'mock-address-1', zoneType = 'URBAN' }) {
   const payload = {
@@ -68,6 +139,13 @@ export async function calculateOrder({ vendorId, items, addressId = 'mock-addres
       vendorId: item.vendorId || vendorId,
     })),
   };
+
+  const calcKey = JSON.stringify(payload);
+  const cachedCalc = calculateCache.get(calcKey);
+  const now = Date.now();
+  if (cachedCalc && now - cachedCalc.timestamp < CACHE_TTL_MS) {
+    return cachedCalc.data;
+  }
 
   const res = await apiRequest('/orders/calculate', {
     method: 'POST',
@@ -93,7 +171,7 @@ export async function calculateOrder({ vendorId, items, addressId = 'mock-addres
       : Math.round((totalOriginalPrice - vendorSettlement) * 100) / 100
   );
 
-  return {
+  const formattedResult = {
     vendorId: data.vendorId || vendorId,
     originalPrice: totalOriginalPrice,
     totalOriginalPrice,
@@ -109,11 +187,14 @@ export async function calculateOrder({ vendorId, items, addressId = 'mock-addres
     deliveryPartnerPayout: Number(data.deliveryPartnerPayout || 25),
     items: data.items || [],
   };
+
+  calculateCache.set(calcKey, { data: formattedResult, timestamp: Date.now() });
+  return formattedResult;
 }
 
 /**
  * Fetch vendors list
- * GET /api/v1/vendors
+ * GET /api/v1/vendors (Cached 60s)
  */
 export async function getVendors() {
   const res = await apiRequest('/vendors');
@@ -122,7 +203,7 @@ export async function getVendors() {
 
 /**
  * Fetch vendor by ID
- * GET /api/v1/vendors/:id
+ * GET /api/v1/vendors/:id (Cached 60s)
  */
 export async function getVendorById(id) {
   const res = await apiRequest(`/vendors/${id}`);
@@ -131,7 +212,7 @@ export async function getVendorById(id) {
 
 /**
  * Fetch products for a vendor
- * GET /api/v1/vendors/:id/products (fallback to /products)
+ * GET /api/v1/vendors/:id/products (fallback to /products, Cached 60s)
  */
 export async function getVendorProducts(vendorId) {
   try {
@@ -153,7 +234,7 @@ export async function getVendorProducts(vendorId) {
 
 /**
  * Create Order
- * POST /api/v1/orders
+ * POST /api/v1/orders - NEVER CACHED
  */
 export async function createOrder(orderData) {
   const res = await apiRequest('/orders', {
@@ -183,7 +264,7 @@ export async function listOrders() {
 
 /**
  * Customer Authentication
- * POST /api/v1/auth/login
+ * POST /api/v1/auth/login - NEVER CACHED
  */
 export async function loginUser(credentials) {
   const res = await apiRequest('/auth/login', {

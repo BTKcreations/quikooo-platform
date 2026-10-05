@@ -274,143 +274,240 @@ export default function VendorsPage() {
         </div>
       )}
 
-      {/* Onboard Vendor Modal */}
+      {/* 2-Step Onboard Vendor Modal */}
       {showModal && (
         <div className="modal-overlay">
           <div className="modal-content">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
               <h2 style={{ fontFamily: 'Outfit, sans-serif', fontSize: '1.25rem', margin: 0 }}>
                 🏪 Onboard Merchant Partner
               </h2>
               <button
-                onClick={() => setShowModal(false)}
+                onClick={() => {
+                  setShowModal(false);
+                  setWizardStep(1);
+                }}
                 style={{
                   background: 'none',
                   border: 'none',
                   fontSize: '1.25rem',
                   cursor: 'pointer',
                   color: '#6B7280',
+                  minHeight: '44px',
+                  minWidth: '44px',
                 }}
               >
                 ✕
               </button>
             </div>
 
-            <p style={{ fontSize: '0.85rem', color: '#6B7280', marginTop: 0 }}>
-              Add a new village merchant or farm produce partner to the <strong>Mandya Rural Hub</strong> roster.
-            </p>
-
-            <form onSubmit={handleOnboardSubmit}>
-              <div className="form-group">
-                <label className="form-label">Store / Farm Name *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Kaveri Organic Farm & Dairy"
-                  className="form-input"
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div className="form-group">
-                  <label className="form-label">Proprietor / Owner Name *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Ramesh Gowda"
-                    className="form-input"
-                    value={form.ownerName}
-                    onChange={(e) => setForm({ ...form, ownerName: e.target.value })}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Phone Number *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="+91 98450 12345"
-                    className="form-input"
-                    value={form.phone}
-                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div className="form-group">
-                  <label className="form-label">Primary Category *</label>
-                  <select
-                    className="form-select"
-                    value={form.category}
-                    onChange={(e) => setForm({ ...form, category: e.target.value })}
-                  >
-                    <option value="Farm Dairy & Veggies">Farm Dairy & Veggies</option>
-                    <option value="Groceries & Staples">Groceries & Staples</option>
-                    <option value="Fresh Prepared Meals">Fresh Prepared Meals</option>
-                    <option value="Poultry & Meat">Poultry & Meat</option>
-                    <option value="Bakery & Snacks">Bakery & Snacks</option>
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Initial SKUs Count</label>
-                  <input
-                    type="number"
-                    min="1"
-                    className="form-input"
-                    value={form.itemsCount}
-                    onChange={(e) => setForm({ ...form, itemsCount: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Physical Address / Village Location *</label>
-                <textarea
-                  rows="2"
-                  required
-                  placeholder="e.g. Near Gejjalagere Gram Panchayat, Mandya"
-                  className="form-textarea"
-                  value={form.address}
-                  onChange={(e) => setForm({ ...form, address: e.target.value })}
-                />
-              </div>
-
-              {/* Business Math Agreement Confirmation */}
+            {/* 2-Step Wizard Indicator */}
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem' }}>
               <div
                 style={{
-                  backgroundColor: '#ECFDF5',
-                  border: '1px solid #A7F3D0',
-                  padding: '0.75rem',
+                  flex: 1,
+                  padding: '0.5rem',
                   borderRadius: '0.5rem',
+                  backgroundColor: wizardStep === 1 ? '#D1FAE5' : '#F3F4F6',
+                  color: wizardStep === 1 ? '#065F46' : '#6B7280',
+                  fontWeight: 700,
                   fontSize: '0.8rem',
-                  color: '#065F46',
-                  marginBottom: '1.25rem',
+                  textAlign: 'center',
+                  border: wizardStep === 1 ? '1.5px solid #059669' : '1px solid transparent',
                 }}
               >
-                <strong>Official Partner Agreement:</strong> Merchant receives 90% settlement (Original listed price - 10% platform commission). Platform applies +5% customer menu markup for operations.
+                1. Store Profile & Contact
               </div>
+              <div
+                style={{
+                  flex: 1,
+                  padding: '0.5rem',
+                  borderRadius: '0.5rem',
+                  backgroundColor: wizardStep === 2 ? '#D1FAE5' : '#F3F4F6',
+                  color: wizardStep === 2 ? '#065F46' : '#6B7280',
+                  fontWeight: 700,
+                  fontSize: '0.8rem',
+                  textAlign: 'center',
+                  border: wizardStep === 2 ? '1.5px solid #059669' : '1px solid transparent',
+                }}
+              >
+                2. Verification & KYC
+              </div>
+            </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => setShowModal(false)}
-                  disabled={submitting}
-                >
-                  Cancel
-                </button>
-                <button type="submit" className="btn-primary" disabled={submitting}>
-                  {submitting ? 'Submitting...' : 'Complete Onboarding'}
-                </button>
-              </div>
+            <form onSubmit={handleOnboardSubmit}>
+              {wizardStep === 1 ? (
+                <div>
+                  <div className="form-group">
+                    <label className="form-label">Store / Farm Name *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Kaveri Organic Farm & Dairy"
+                      className="form-input"
+                      value={form.name}
+                      onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    />
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    <div className="form-group">
+                      <label className="form-label">Proprietor / Owner Name *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Ramesh Gowda"
+                        className="form-input"
+                        value={form.ownerName}
+                        onChange={(e) => setForm({ ...form, ownerName: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">Phone Number *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="+91 98450 12345"
+                        className="form-input"
+                        value={form.phone}
+                        onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    <div className="form-group">
+                      <label className="form-label">Primary Category *</label>
+                      <select
+                        className="form-select"
+                        value={form.category}
+                        onChange={(e) => setForm({ ...form, category: e.target.value })}
+                      >
+                        <option value="Farm Dairy & Veggies">Farm Dairy & Veggies</option>
+                        <option value="Groceries & Staples">Groceries & Staples</option>
+                        <option value="Fresh Prepared Meals">Fresh Prepared Meals</option>
+                        <option value="Poultry & Meat">Poultry & Meat</option>
+                        <option value="Bakery & Snacks">Bakery & Snacks</option>
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">Initial SKUs Count</label>
+                      <input
+                        type="number"
+                        min="1"
+                        className="form-input"
+                        value={form.itemsCount}
+                        onChange={(e) => setForm({ ...form, itemsCount: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => setShowModal(false)}
+                      style={{ minHeight: '44px' }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      onClick={() => {
+                        if (form.name && form.ownerName && form.phone) {
+                          setWizardStep(2);
+                        } else {
+                          alert('Please enter Store Name, Owner Name and Phone Number');
+                        }
+                      }}
+                      style={{ minHeight: '44px', padding: '0.5rem 1.25rem' }}
+                    >
+                      Next: Verification & KYC →
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div className="form-group">
+                    <label className="form-label">Physical Address / Village Location *</label>
+                    <textarea
+                      rows="2"
+                      required
+                      placeholder="e.g. Near Gejjalagere Gram Panchayat, Mandya"
+                      className="form-textarea"
+                      value={form.address}
+                      onChange={(e) => setForm({ ...form, address: e.target.value })}
+                    />
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    <div className="form-group">
+                      <label className="form-label">FSSAI / Trade License No. (Optional)</label>
+                      <input
+                        type="text"
+                        placeholder="FSSAI-2026-XXXX"
+                        className="form-input"
+                        value={form.fssaiNumber || ''}
+                        onChange={(e) => setForm({ ...form, fssaiNumber: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">Settlement UPI / Bank Account ID *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="merchant@upi or IFSC A/C"
+                        className="form-input"
+                        value={form.settlementUpi || ''}
+                        onChange={(e) => setForm({ ...form, settlementUpi: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Business Math Agreement Confirmation */}
+                  <div
+                    style={{
+                      backgroundColor: '#ECFDF5',
+                      border: '1px solid #A7F3D0',
+                      padding: '0.75rem',
+                      borderRadius: '0.5rem',
+                      fontSize: '0.8rem',
+                      color: '#065F46',
+                      marginBottom: '1.25rem',
+                    }}
+                  >
+                    <strong>Official Partner Agreement:</strong> Merchant receives 90% settlement (Original listed price - 10% platform commission). Platform applies +5% customer menu markup for packaging & operations.
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem' }}>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => setWizardStep(1)}
+                      style={{ minHeight: '44px' }}
+                    >
+                      ← Back to Profile
+                    </button>
+                    <button
+                      type="submit"
+                      className="btn-primary"
+                      disabled={submitting}
+                      style={{ minHeight: '44px', padding: '0.5rem 1.25rem' }}
+                    >
+                      {submitting ? 'Submitting...' : 'Complete Merchant Onboarding'}
+                    </button>
+                  </div>
+                </div>
+              )}
             </form>
           </div>
         </div>
       )}
+
     </div>
   );
 }

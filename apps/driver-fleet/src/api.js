@@ -2,9 +2,44 @@
  * QUIKOOO Driver Fleet API Client & Payout Engine
  * Connects to Express backend /api/v1
  * Source of Truth: docs/FULL-PLATFORM-PLAN.md (Section 1.2, 7.5)
+ * 2026 Perf: 60s in-memory SWR cache for GET, debounce 300ms, never cache POST
  */
 
 const API_BASE = '/api/v1';
+
+/**
+ * In-Memory 60s SWR Cache for GET requests
+ */
+const apiCache = new Map();
+const CACHE_TTL_MS = 60 * 1000;
+
+export function clearApiCache() {
+  apiCache.clear();
+}
+
+/**
+ * Standard debounce utility (300ms default)
+ */
+export function debounce(fn, delay = 300) {
+  let timer = null;
+  const debounced = function (...args) {
+    if (timer) clearTimeout(timer);
+    return new Promise((resolve) => {
+      timer = setTimeout(async () => {
+        try {
+          const result = await fn.apply(this, args);
+          resolve(result);
+        } catch {
+          resolve(null);
+        }
+      }, delay);
+    });
+  };
+  debounced.cancel = () => {
+    if (timer) clearTimeout(timer);
+  };
+  return debounced;
+}
 
 /**
  * Standard Driver Delivery Payout Rate
@@ -15,10 +50,6 @@ export const DELIVERY_PARTNER_PAYOUT_RATE = 25.0;
 /**
  * Calculates delivery partner earnings based on delivery count
  * Formula: 25 * n
- * 
- * @param {number} deliveryCount - Number of completed deliveries
- * @param {number} [ratePerDelivery=25] - Flat rate per delivery (default ₹25.00)
- * @returns {number}
  */
 export function calculateDriverPayout(deliveryCount, ratePerDelivery = DELIVERY_PARTNER_PAYOUT_RATE) {
   const count = Math.max(0, parseInt(deliveryCount, 10) || 0);
@@ -27,11 +58,26 @@ export function calculateDriverPayout(deliveryCount, ratePerDelivery = DELIVERY_
 }
 
 /**
+ * Calculates earnings progress ring metrics for daily target tracking
+ */
+export function calculateEarningsProgress(completedCount, dailyTargetCount = 16) {
+  const completed = Math.max(0, parseInt(completedCount, 10) || 0);
+  const target = Math.max(1, parseInt(dailyTargetCount, 10) || 16);
+  const earned = completed * DELIVERY_PARTNER_PAYOUT_RATE;
+  const targetAmount = target * DELIVERY_PARTNER_PAYOUT_RATE;
+  const percent = Math.min(100, Math.round((completed / target) * 100));
+  return {
+    completed,
+    target,
+    earned,
+    targetAmount,
+    percent,
+  };
+}
+
+/**
  * Validates delivery handshake OTP (Vendor pickup OTP or Customer delivery OTP)
  * Strictly requires 4 numeric digits (e.g. "4512")
- * 
- * @param {string|number} otp
- * @returns {boolean}
  */
 export function validateDeliveryOtp(otp) {
   if (otp === null || otp === undefined) return false;
@@ -40,14 +86,45 @@ export function validateDeliveryOtp(otp) {
 }
 
 /**
- * Standard fetch helper with error handling
+ * Standard fetch helper with JSON parsing, error wrapping, and SWR caching for GET
  */
 async function apiFetch(endpoint, options = {}) {
+  const method = (options.method || 'GET').toUpperCase();
   const headers = {
     'Content-Type': 'application/json',
     ...(options.headers || {}),
   };
 
+  if (method === 'GET') {
+    const cached = apiCache.get(endpoint);
+    const now = Date.now();
+    if (cached) {
+      if (now - cached.timestamp < CACHE_TTL_MS) {
+        return cached.data;
+      }
+      fetch(`${API_BASE}${endpoint}`, { ...options, headers })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((fresh) => {
+          if (fresh) apiCache.set(endpoint, { data: fresh, timestamp: Date.now() });
+        })
+        .catch(() => {});
+      return cached.data;
+    }
+
+    const res = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const errorMsg = json.message || `Request failed with status ${res.status}`;
+      const err = new Error(errorMsg);
+      err.status = res.status;
+      err.data = json;
+      throw err;
+    }
+    apiCache.set(endpoint, { data: json, timestamp: Date.now() });
+    return json;
+  }
+
+  // Non-GET requests: NEVER CACHED
   const res = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
     headers,
@@ -68,8 +145,6 @@ async function apiFetch(endpoint, options = {}) {
 /**
  * Assign Delivery Partner to Order
  * POST /api/v1/delivery/assign
- * 
- * @param {{ orderId: string, deliveryPartnerId?: string }} payload 
  */
 export async function assignDelivery({ orderId, deliveryPartnerId = 'driver-partner-007' }) {
   try {
@@ -96,8 +171,6 @@ export async function assignDelivery({ orderId, deliveryPartnerId = 'driver-part
 /**
  * Accept Delivery Task
  * POST /api/v1/delivery/:id/accept
- * 
- * @param {string} taskId
  */
 export async function acceptDeliveryTask(taskId) {
   try {
@@ -106,7 +179,6 @@ export async function acceptDeliveryTask(taskId) {
     });
     if (res && res.data) return res.data;
   } catch (err) {
-    // If route doesn't exist, try status patch or fallback
     try {
       const patchRes = await apiFetch('/delivery/status', {
         method: 'PATCH',
@@ -129,9 +201,6 @@ export async function acceptDeliveryTask(taskId) {
 /**
  * Pickup Delivery from Vendor with OTP Handshake
  * POST /api/v1/delivery/:id/pickup
- * 
- * @param {string} taskId 
- * @param {string} otp - 4-digit OTP provided by merchant
  */
 export async function pickupDeliveryTask(taskId, otp) {
   if (!validateDeliveryOtp(otp)) {
@@ -145,7 +214,6 @@ export async function pickupDeliveryTask(taskId, otp) {
     });
     if (res && res.data) return res.data;
   } catch (err) {
-    // Fallback status patch check
     try {
       const patchRes = await apiFetch('/delivery/status', {
         method: 'PATCH',
@@ -169,9 +237,6 @@ export async function pickupDeliveryTask(taskId, otp) {
 /**
  * Complete Delivery to Customer with OTP Handshake
  * POST /api/v1/delivery/:id/complete
- * 
- * @param {string} taskId 
- * @param {string} otp - 4-digit OTP provided by customer
  */
 export async function completeDeliveryTask(taskId, otp) {
   if (!validateDeliveryOtp(otp)) {
@@ -210,7 +275,6 @@ export async function completeDeliveryTask(taskId, otp) {
  * Get active and recent driver tasks (Stub tolerant)
  */
 export async function getDriverTasks() {
-  // Stub initial tasks with rich details
   return [
     {
       id: 'task-501',

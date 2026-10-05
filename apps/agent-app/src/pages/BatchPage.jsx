@@ -4,8 +4,11 @@ import {
   getRuralBatchOrders,
   dispatchRuralBatch,
   isRuralOrderEligible,
+  calculateCutoffCountdown,
   formatINR,
 } from '../api.js';
+
+
 
 export default function BatchPage() {
   const [deliveryDate, setDeliveryDate] = useState(() => {
@@ -23,11 +26,20 @@ export default function BatchPage() {
   // Cutoff simulation / state
   const [simulatedTime, setSimulatedTime] = useState('21:00');
   const [useSimulatedClock, setUseSimulatedClock] = useState(false);
+  const [countdown, setCountdown] = useState(() => calculateCutoffCountdown(new Date()));
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCountdown(calculateCutoffCountdown(new Date()));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Compute cutoff eligibility
   const isCutoffPassed = useSimulatedClock
     ? !isRuralOrderEligible(simulatedTime)
     : !isRuralOrderEligible(new Date());
+
 
   useEffect(() => {
     const meta = getDeliveryBatch(deliveryDate);
@@ -161,8 +173,30 @@ export default function BatchPage() {
               : 'Accepting scheduled rural orders for early morning delivery. Ordering will automatically lock at exactly 21:00 IST.'}
           </p>
 
+          {/* Live Cutoff Countdown Timer */}
+          <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: isCutoffPassed ? '#991B1B' : '#065F46' }}>
+              ⏱️ 21:00 Asia/Kolkata Cutoff Countdown:
+            </span>
+            <span
+              style={{
+                fontFamily: 'monospace',
+                fontWeight: 800,
+                fontSize: '0.95rem',
+                backgroundColor: isCutoffPassed ? '#FEE2E2' : '#D1FAE5',
+                color: isCutoffPassed ? '#991B1B' : '#065F46',
+                padding: '0.2rem 0.6rem',
+                borderRadius: '4px',
+                letterSpacing: '0.05em',
+              }}
+            >
+              {isCutoffPassed ? '00h : 00m : 00s (Cutoff Locked)' : countdown.formatted}
+            </span>
+          </div>
+
           {/* Interactive Clock Simulation Tool */}
           <div
+
             style={{
               marginTop: '0.75rem',
               paddingTop: '0.75rem',

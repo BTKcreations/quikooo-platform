@@ -96,4 +96,50 @@ describe('Merchant Studio Tests', () => {
       expect(zero.vendorSettlement).toBe(0);
     });
   });
+
+  describe('2026 UX & Perf Features (Prep-Time, Stock Toggle & Debounce)', () => {
+    it('buildPrepTimePayload produces valid kitchen preparation window metadata', () => {
+      const { buildPrepTimePayload } = require('../src/api.js');
+      const payload15 = buildPrepTimePayload('ord-123', 15);
+      expect(payload15.orderId).toBe('ord-123');
+      expect(payload15.prepMinutes).toBe(15);
+      expect(payload15.notes).toContain('15 minutes');
+      expect(new Date(payload15.estimatedReadyAt).getTime()).toBeGreaterThan(Date.now() - 1000);
+
+      const defaultPayload = buildPrepTimePayload('ord-456');
+      expect(defaultPayload.prepMinutes).toBe(15);
+    });
+
+    it('toggleItemStock accurately flips in-stock status without mutating other items', () => {
+      const { toggleItemStock } = require('../src/api.js');
+      const items = [
+        { id: 'item-1', name: 'Biryani', inStock: true },
+        { id: 'item-2', name: 'Naan', inStock: false },
+      ];
+
+      const updated = toggleItemStock(items, 'item-2');
+      expect(updated[1].inStock).toBe(true);
+      expect(updated[0].inStock).toBe(true);
+
+      const toggledOff = toggleItemStock(updated, 'item-1');
+      expect(toggledOff[0].inStock).toBe(false);
+      expect(toggledOff[1].inStock).toBe(true);
+    });
+
+    it('debounce utility coalesces multiple calls within 300ms window', async () => {
+      const { debounce } = require('../src/api.js');
+      let count = 0;
+      const debounced = debounce(() => {
+        count += 1;
+        return count;
+      }, 50);
+
+      debounced();
+      debounced();
+      const res = await debounced();
+      expect(count).toBe(1);
+      expect(res).toBe(1);
+    });
+  });
 });
+

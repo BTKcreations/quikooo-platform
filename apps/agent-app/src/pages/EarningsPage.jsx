@@ -284,19 +284,31 @@ export default function EarningsPage() {
             </p>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <label style={{ fontSize: '0.85rem', fontWeight: 600 }}>Orders Count:</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, maxWidth: '420px' }}>
+            <label style={{ fontSize: '0.85rem', fontWeight: 600, whiteSpace: 'nowrap' }}>Orders Slider:</label>
+            <input
+              type="range"
+              min="10"
+              max="2500"
+              step="10"
+              value={orderCount}
+              onChange={(e) => setOrderCount(Number(e.target.value))}
+              style={{ flex: 1, cursor: 'pointer' }}
+              aria-label="Order volume simulator slider"
+            />
             <input
               type="number"
               min="1"
               max="10000"
               className="form-input"
-              style={{ width: '100px', padding: '0.35rem 0.6rem' }}
+              style={{ width: '85px', padding: '0.35rem 0.6rem' }}
               value={orderCount}
               onChange={(e) => setOrderCount(Math.max(1, parseInt(e.target.value, 10) || 1))}
+              aria-label="Order volume number"
             />
           </div>
         </div>
+
 
         {/* 60/40 Split Bar Visualizer */}
         <div style={{ marginBottom: '1.25rem' }}>

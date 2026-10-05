@@ -199,4 +199,46 @@ describe('Agent App & Rural Batch Logistics Tests', () => {
       expect(dispatchResult.dispatchedWindow).toBe('05:00 - 08:00');
     });
   });
+
+  describe('Cutoff Countdown & Debounce Utilities (2026 Perf/UX)', () => {
+    it('calculates remaining cutoff countdown correctly before 21:00 IST', async () => {
+      const { calculateCutoffCountdown } = await import('../src/api.js');
+      // 20:00:00 IST (14:30:00 UTC) -> 1 hour left
+      const date = new Date('2026-10-05T14:30:00.000Z');
+      const countdown = calculateCutoffCountdown(date);
+      expect(countdown.isPassed).toBe(false);
+      expect(countdown.hours).toBe(1);
+      expect(countdown.minutes).toBe(0);
+      expect(countdown.seconds).toBe(0);
+      expect(countdown.totalSeconds).toBe(3600);
+      expect(countdown.formatted).toBe('01h : 00m : 00s');
+    });
+
+    it('reports locked countdown when past 21:00 IST', async () => {
+      const { calculateCutoffCountdown } = await import('../src/api.js');
+      // 21:15:00 IST (15:45:00 UTC) -> Locked
+      const date = new Date('2026-10-05T15:45:00.000Z');
+      const countdown = calculateCutoffCountdown(date);
+      expect(countdown.isPassed).toBe(true);
+      expect(countdown.totalSeconds).toBe(0);
+      expect(countdown.formatted).toContain('Locked');
+    });
+
+    it('debounce utility coalesces rapid calls within delay window', async () => {
+      const { debounce } = await import('../src/api.js');
+      let callCount = 0;
+      const fn = debounce(() => {
+        callCount++;
+        return 'done';
+      }, 50);
+
+      const p1 = fn();
+      const p2 = fn();
+      const p3 = fn();
+
+      const res = await p3;
+      expect(res).toBe('done');
+      expect(callCount).toBe(1);
+    });
+  });
 });

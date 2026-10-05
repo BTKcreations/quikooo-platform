@@ -118,4 +118,66 @@ describe('Customer Cart Store & Pricing Engine Tests', () => {
       });
     });
   });
+
+  describe('2026 Perf & Persistence Enhancements', () => {
+    it('persists cart items to localStorage and rehydrates on new store instance', () => {
+      const mockStorage = {};
+      const origStorage = globalThis.localStorage;
+      globalThis.localStorage = {
+        getItem: (k) => mockStorage[k] || null,
+        setItem: (k, v) => { mockStorage[k] = String(v); },
+        removeItem: (k) => { delete mockStorage[k]; },
+        clear: () => { Object.keys(mockStorage).forEach((k) => delete mockStorage[k]); },
+      };
+
+      try {
+        const store1 = new CartStore({ items: [], vendorId: null, vendorName: null });
+        store1.addItem(
+          { productId: 'prod-persist-1', name: 'Dal Makhani', originalPrice: 120, quantity: 2 },
+          { id: 'vendor-persist', name: 'Punjab Dhaba' }
+        );
+
+        expect(mockStorage['quikooo_customer_cart']).toBeDefined();
+        const parsed = JSON.parse(mockStorage['quikooo_customer_cart']);
+        expect(parsed.vendorId).toBe('vendor-persist');
+        expect(parsed.items).toHaveLength(1);
+        expect(parsed.items[0].name).toBe('Dal Makhani');
+
+        // Instantiate second store without initial state to verify automatic rehydration
+        const store2 = new CartStore();
+        const state2 = store2.getState();
+        expect(state2.vendorId).toBe('vendor-persist');
+        expect(state2.items).toHaveLength(1);
+        expect(state2.items[0].productId).toBe('prod-persist-1');
+        expect(state2.items[0].quantity).toBe(2);
+      } finally {
+        globalThis.localStorage = origStorage;
+      }
+    });
+
+    it('reorder helper clears prior cart and populates items with single vendor in 1-tap', () => {
+      const store = new CartStore({ items: [], vendorId: null, vendorName: null });
+      store.addItem(
+        { productId: 'old-1', name: 'Old Item', originalPrice: 50 },
+        { id: 'v-old', name: 'Old Vendor' }
+      );
+      expect(store.getState().items).toHaveLength(1);
+
+      store.reorder(
+        [
+          { productId: 'p-new-1', name: 'Butter Chicken', originalPrice: 200, quantity: 1 },
+          { productId: 'p-new-2', name: 'Roti', originalPrice: 30, quantity: 2 },
+        ],
+        { id: 'v-new', name: 'Royal Kitchen' }
+      );
+
+      const state = store.getState();
+      expect(state.vendorId).toBe('v-new');
+      expect(state.vendorName).toBe('Royal Kitchen');
+      expect(state.items).toHaveLength(2);
+      expect(state.itemCount).toBe(3); // 1 + 2
+      expect(state.breakdown.originalPrice).toBe(260); // 200 + 30*2
+    });
+  });
 });
+

@@ -16,7 +16,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Mobile-First Shell Constraint per Rule 3 */
+/* Mobile-First Shell Constraint per 2026 Guidelines */
 .app-viewport {
   min-height: 100vh;
   background-color: var(--color-canvas-bg, #FBFBF9);
@@ -26,14 +26,94 @@ body {
 
 .mobile-shell {
   width: 100%;
-  max-width: 480px;
+  max-width: 520px;
   min-height: 100vh;
   background-color: #FFFFFF;
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.06);
   display: flex;
   flex-direction: column;
   position: relative;
-  padding-bottom: 5rem;
+  padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+  transition: max-width 0.2s ease;
+}
+
+@media (min-width: 768px) {
+  .mobile-shell {
+    max-width: 768px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .mobile-shell {
+    max-width: 1280px;
+    flex-direction: row;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
+    padding-bottom: 2rem;
+  }
+
+  .mobile-main-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .desktop-sidebar {
+    display: flex !important;
+  }
+
+  .bottom-nav {
+    display: none !important;
+  }
+}
+
+/* Desktop Sidebar Nav */
+.desktop-sidebar {
+  display: none;
+  width: 250px;
+  background-color: #FFFFFF;
+  border-right: 1px solid var(--color-surface-subtle, #F3F4F0);
+  padding: 1.5rem 1rem;
+  flex-direction: column;
+  gap: 0.5rem;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem 1.25rem;
+  border-bottom: 1px solid #F3F4F0;
+  margin-bottom: 0.5rem;
+  text-decoration: none;
+}
+
+.sidebar-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-lg, 0.75rem);
+  color: var(--color-text-secondary, #4B5563);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  min-height: 44px;
+  transition: all 0.15s ease;
+}
+
+.sidebar-nav-item:hover {
+  background-color: var(--color-brand-light-50, #ECFDF5);
+  color: var(--color-brand-primary, #059669);
+}
+
+.sidebar-nav-item.active {
+  background-color: var(--color-brand-light-100, #D1FAE5);
+  color: var(--color-brand-dark, #064E3B);
 }
 
 /* Header Banner */
@@ -48,6 +128,7 @@ body {
   align-items: center;
   justify-content: space-between;
   box-shadow: var(--shadow-sm);
+  min-height: 56px;
 }
 
 .brand-title {
@@ -59,13 +140,14 @@ body {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  min-height: 44px;
 }
 
 .brand-pill {
   font-size: 0.65rem;
   font-weight: 700;
   background: rgba(255, 255, 255, 0.2);
-  padding: 0.15rem 0.4rem;
+  padding: 0.2rem 0.45rem;
   border-radius: 9999px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -78,27 +160,36 @@ body {
   left: 50%;
   transform: translateX(-50%);
   width: 100%;
-  max-width: 480px;
+  max-width: 520px;
   background-color: #FFFFFF;
   border-top: 1px solid var(--color-surface-subtle, #F3F4F0);
   display: flex;
   justify-content: space-around;
-  padding: 0.5rem 0;
+  padding: 0.5rem 0 calc(0.5rem + env(safe-area-inset-bottom, 0px));
   z-index: 50;
   box-shadow: 0 -4px 10px rgba(0, 0, 0, 0.03);
+}
+
+@media (min-width: 768px) {
+  .bottom-nav {
+    max-width: 768px;
+  }
 }
 
 .nav-item {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--color-text-secondary, #4B5563);
   text-decoration: none;
   gap: 0.2rem;
-  padding: 0.25rem 0.5rem;
+  padding: 0.35rem 0.75rem;
   position: relative;
+  min-height: 44px;
+  min-width: 52px;
 }
 
 .nav-item.active {
@@ -107,35 +198,41 @@ body {
 
 .cart-count-badge {
   position: absolute;
-  top: 0;
-  right: 0.25rem;
+  top: 2px;
+  right: 0.5rem;
   background-color: var(--color-brand-primary, #059669);
   color: #FFFFFF;
   font-size: 0.7rem;
   font-weight: 700;
   border-radius: 9999px;
-  min-width: 1.1rem;
-  height: 1.1rem;
+  min-width: 1.15rem;
+  height: 1.15rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0 0.2rem;
+  padding: 0 0.25rem;
 }
 
 /* Page Container */
 .page-content {
   flex: 1;
-  padding: 1rem;
+  padding: 1rem 1.25rem;
+}
+
+@media (min-width: 768px) {
+  .page-content {
+    padding: 1.5rem;
+  }
 }
 
 /* Floating Bottom Bar (Cart Checkout action) */
 .floating-checkout-bar {
   position: fixed;
-  bottom: 3.8rem;
+  bottom: calc(4.2rem + env(safe-area-inset-bottom, 0px));
   left: 50%;
   transform: translateX(-50%);
   width: calc(100% - 2rem);
-  max-width: 448px;
+  max-width: 480px;
   z-index: 45;
 }
 

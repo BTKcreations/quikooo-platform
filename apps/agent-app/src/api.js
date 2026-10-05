@@ -205,14 +205,124 @@ export function calculateNetEconomics({
 }
 
 /**
- * Generic API Fetch Helper
+ * In-Memory 60s SWR Cache for GET requests
+ */
+const apiCache = new Map();
+const CACHE_TTL_MS = 60 * 1000;
+
+export function clearApiCache() {
+  apiCache.clear();
+}
+
+/**
+ * Standard debounce utility (300ms default)
+ */
+export function debounce(fn, delay = 300) {
+  let timer = null;
+  const debounced = function (...args) {
+    if (timer) clearTimeout(timer);
+    return new Promise((resolve) => {
+      timer = setTimeout(async () => {
+        try {
+          const result = await fn.apply(this, args);
+          resolve(result);
+        } catch {
+          resolve(null);
+        }
+      }, delay);
+    });
+  };
+  debounced.cancel = () => {
+    if (timer) clearTimeout(timer);
+  };
+  return debounced;
+}
+
+/**
+ * Calculates remaining countdown time until 21:00 Asia/Kolkata cutoff
+ * @param {Date} [currentTime]
+ */
+export function calculateCutoffCountdown(currentTime = new Date()) {
+  const formatter = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Kolkata',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+
+  const formatted = formatter.format(currentTime);
+  const [h, m, s] = formatted.split(':').map(Number);
+  const currentTotalSeconds = h * 3600 + m * 60 + s;
+  const cutoffTotalSeconds = 21 * 3600; // 21:00:00 = 75,600 seconds
+
+  if (currentTotalSeconds >= cutoffTotalSeconds) {
+    return {
+      hours: 0,
+      minutes: 0,
+      seconds: 0,
+      totalSeconds: 0,
+      isPassed: true,
+      formatted: '00:00:00 (Locked)',
+    };
+  }
+
+  const diff = cutoffTotalSeconds - currentTotalSeconds;
+  const remH = Math.floor(diff / 3600);
+  const remM = Math.floor((diff % 3600) / 60);
+  const remS = diff % 60;
+  const pad = (n) => String(n).padStart(2, '0');
+
+  return {
+    hours: remH,
+    minutes: remM,
+    seconds: remS,
+    totalSeconds: diff,
+    isPassed: false,
+    formatted: `${pad(remH)}h : ${pad(remM)}m : ${pad(remS)}s`,
+  };
+}
+
+/**
+ * Generic API Fetch Helper with SWR Caching for GET
  */
 async function apiFetch(endpoint, options = {}) {
+  const method = (options.method || 'GET').toUpperCase();
   const headers = {
     'Content-Type': 'application/json',
     ...(options.headers || {}),
   };
 
+  if (method === 'GET') {
+    const cached = apiCache.get(endpoint);
+    const now = Date.now();
+    if (cached) {
+      if (now - cached.timestamp < CACHE_TTL_MS) {
+        return cached.data;
+      }
+      fetch(`${API_BASE}${endpoint}`, { ...options, headers })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((fresh) => {
+          if (fresh) apiCache.set(endpoint, { data: fresh, timestamp: Date.now() });
+        })
+        .catch(() => {});
+      return cached.data;
+    }
+
+    const res = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const errorMsg = json.message || `Request failed with status ${res.status}`;
+      const err = new Error(errorMsg);
+      err.status = res.status;
+      err.data = json;
+      throw err;
+    }
+    apiCache.set(endpoint, { data: json, timestamp: Date.now() });
+    return json;
+  }
+
+  // Non-GET requests: NEVER CACHED
   const res = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
     headers,
@@ -229,6 +339,7 @@ async function apiFetch(endpoint, options = {}) {
 
   return json;
 }
+
 
 /**
  * GET /api/v1/agents/:id/analytics

@@ -99,4 +99,45 @@ describe('Driver Fleet Tests', () => {
       expect(result.payoutEarned).toBe(25);
     });
   });
+
+  describe('2026 Driver Cockpit Features (Earnings Progress Ring & Debounce)', () => {
+    it('calculateEarningsProgress computes correct percentages and monetary figures for target ring', () => {
+      const { calculateEarningsProgress } = require('../src/api.js');
+
+      // 8 of 16 completed = 50%
+      const half = calculateEarningsProgress(8, 16);
+      expect(half.completed).toBe(8);
+      expect(half.target).toBe(16);
+      expect(half.earned).toBe(200); // 8 * 25
+      expect(half.targetAmount).toBe(400); // 16 * 25
+      expect(half.percent).toBe(50);
+
+      // 16 of 16 completed = 100%
+      const full = calculateEarningsProgress(16, 16);
+      expect(full.percent).toBe(100);
+      expect(full.earned).toBe(400);
+
+      // Overachieved caps at 100%
+      const over = calculateEarningsProgress(20, 16);
+      expect(over.percent).toBe(100);
+      expect(over.earned).toBe(500);
+    });
+
+    it('debounce utility coalesces driver status and search calls within window', async () => {
+      const { debounce } = require('../src/api.js');
+      let executions = 0;
+      const debouncedAction = debounce((x) => {
+        executions += 1;
+        return x * 10;
+      }, 50);
+
+      debouncedAction(1);
+      debouncedAction(2);
+      const res = await debouncedAction(3);
+
+      expect(executions).toBe(1);
+      expect(res).toBe(30);
+    });
+  });
 });
+
