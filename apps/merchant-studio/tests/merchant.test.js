@@ -3,7 +3,14 @@ import {
   buildTransitionPayload,
   calculateSettlement,
   MERCHANT_TRANSITIONS,
+  DEFAULT_AUDIO_MUTED,
+  PREP_TIME_OPTIONS,
+  isValidPrepTime,
 } from '../src/api.js';
+import {
+  DEFAULT_AUDIO_MUTED as COMPONENT_DEFAULT_AUDIO_MUTED,
+  getStoredAudioMuted,
+} from '../src/components/AudioAlert.jsx';
 
 describe('Merchant Studio Tests', () => {
   describe('Transition Payload Builder & Kitchen State Machine', () => {
@@ -139,6 +146,31 @@ describe('Merchant Studio Tests', () => {
       const res = await debounced();
       expect(count).toBe(1);
       expect(res).toBe(1);
+    });
+
+    it('audio default muted flag is initialized to false so kitchen sounds chime on new orders', () => {
+      // Audio default muted flag must be false so new orders trigger an audible alert
+      expect(DEFAULT_AUDIO_MUTED).toBe(false);
+      expect(COMPONENT_DEFAULT_AUDIO_MUTED).toBe(false);
+      expect(getStoredAudioMuted()).toBe(false);
+    });
+
+    it('prep-time valid options defines accepted kitchen durations and validates selections', () => {
+      // Valid prep-time options must be positive numbers representing minutes [10, 15, 20, 30]
+      expect(PREP_TIME_OPTIONS).toEqual([10, 15, 20, 30]);
+      expect(PREP_TIME_OPTIONS.every((opt) => typeof opt === 'number' && opt > 0)).toBe(true);
+
+      // Validate allowed prep-time values
+      expect(isValidPrepTime(10)).toBe(true);
+      expect(isValidPrepTime(15)).toBe(true);
+      expect(isValidPrepTime(20)).toBe(true);
+      expect(isValidPrepTime(30)).toBe(true);
+
+      // Invalid prep-time values rejected
+      expect(isValidPrepTime(0)).toBe(false);
+      expect(isValidPrepTime(-10)).toBe(false);
+      expect(isValidPrepTime(45)).toBe(false);
+      expect(isValidPrepTime('invalid')).toBe(false);
     });
   });
 });

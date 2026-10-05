@@ -99,6 +99,20 @@ export function buildTransitionPayload(currentStatus, nextStatus, notes = '') {
 }
 
 /**
+ * Audio default mute state for merchant terminal
+ */
+export const DEFAULT_AUDIO_MUTED = false;
+
+/**
+ * Standard kitchen preparation time options (in minutes)
+ */
+export const PREP_TIME_OPTIONS = [10, 15, 20, 30];
+
+export function isValidPrepTime(mins) {
+  return PREP_TIME_OPTIONS.includes(Number(mins));
+}
+
+/**
  * Builds prep time selector payload for kitchen acceptance
  */
 export function buildPrepTimePayload(orderId, prepMinutes = 15) {
