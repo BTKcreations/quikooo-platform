@@ -25,10 +25,12 @@ const adminRoutes = require('./modules/admin/admin.routes');
 const notificationsRoutes = require('./modules/notifications/notifications.routes');
 const reportsRoutes = require('./modules/reports/reports.routes');
 
+const { initRealtime } = require('./realtime');
+
 const app = express();
 const server = http.createServer(app);
 
-// Socket.IO real-time event pipeline placeholder
+// Socket.IO real-time event pipeline
 const io = new Server(server, {
   cors: {
     origin: '*',
@@ -36,17 +38,8 @@ const io = new Server(server, {
   },
 });
 
-io.on('connection', (socket) => {
-  console.log(`[Socket.IO] Client connected: ${socket.id}`);
-
-  socket.on('join_zone', (zoneId) => {
-    socket.join(`zone_${zoneId}`);
-  });
-
-  socket.on('disconnect', () => {
-    console.log(`[Socket.IO] Client disconnected: ${socket.id}`);
-  });
-});
+// Initialize realtime rooms and event listeners
+initRealtime(io);
 
 // Security & Parsing Middleware
 app.use(helmet());

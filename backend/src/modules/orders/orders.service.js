@@ -1,7 +1,18 @@
 const OrderService = require('../../services/OrderService');
 const db = require('../../db');
 
+// In-memory order store for offline/test environments
+const orderMemoryStore = new Map();
+
 class OrdersModuleService {
+  static getStore() {
+    return orderMemoryStore;
+  }
+
+  static clearStore() {
+    orderMemoryStore.clear();
+  }
+
   /**
    * Calculates order totals with 100% server authority
    */
@@ -50,12 +61,15 @@ class OrdersModuleService {
       }
     }
 
-    // Graceful offline/mock return
-    return {
-      id: 'mock-order-uuid',
+    // Graceful offline/test return
+    const orderId = data.id || `ord-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+    const mockOrder = {
+      id: orderId,
       ...snapshot,
       _persisted: false,
     };
+    orderMemoryStore.set(orderId, mockOrder);
+    return mockOrder;
   }
 
   /**
@@ -70,18 +84,69 @@ class OrdersModuleService {
     };
   }
 
+  /**
+   * Updates order status with validation against current state
+   */
+  static async updateOrderStatus(id, nextStatus) {
+    const order = await this.getById(id);
+    OrderService.validateTransition(order.status, nextStatus);
+
+    order.status = nextStatus;
+    order.updatedAt = new Date().toISOString();
+    orderMemoryStore.set(id, order);
+
+    if (db.isConnected()) {
+      await db.query('UPDATE orders SET status = $1, updated_at = NOW() WHERE id = $2', [nextStatus, id]);
+    }
+
+    return order;
+  }
+
+  /**
+   * Retrieves an order by ID from memory store or DB
+   */
   static async getById(id) {
-    // TODO: Connect with DB query SELECT * FROM orders WHERE id = $1
-    return {
+    if (orderMemoryStore.has(id)) {
+      return orderMemoryStore.get(id);
+    }
+
+    if (db.isConnected()) {
+      const res = await db.query('SELECT * FROM orders WHERE id = $1', [id]);
+      if (res.rows[0]) return res.rows[0];
+    }
+
+    // Default stub fallback
+    const stub = {
       id,
       orderNumber: `QK-ORD-${id.substring(0, 6)}`,
       status: OrderService.ORDER_STATUS.ORDER_PLACED,
+      zoneId: 'zone-default',
       note: 'Order details stub',
     };
+    orderMemoryStore.set(id, stub);
+    return stub;
+  }
+
+  /**
+   * Helper to set mock order for testing
+   */
+  static setMockOrder(id, orderData) {
+    const existing = orderMemoryStore.get(id) || {};
+    const merged = { ...existing, id, ...orderData };
+    orderMemoryStore.set(id, merged);
+    return merged;
   }
 
   static async list(filters = {}) {
-    // TODO: Connect with DB query SELECT * FROM orders
+    if (orderMemoryStore.size > 0) {
+      const items = Array.from(orderMemoryStore.values());
+      return {
+        items,
+        total: items.length,
+        filters,
+      };
+    }
+
     return {
       items: [],
       total: 0,

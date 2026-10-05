@@ -82,6 +82,15 @@ class OrdersController {
   static async transitionStatus(req, res, next) {
     try {
       const { currentStatus, nextStatus } = req.body;
+
+      // Security rule: Only payment webhooks can transition an order to PAYMENT_CONFIRMED
+      if (nextStatus === 'PAYMENT_CONFIRMED') {
+        return res.status(403).json({
+          success: false,
+          message: 'Client cannot transition order to PAYMENT_CONFIRMED. Only verified payment webhooks can confirm payments.',
+        });
+      }
+
       const result = OrdersService.transitionStatus(currentStatus, nextStatus);
       return res.status(200).json({
         success: true,
