@@ -19,6 +19,15 @@ class AgentsController {
     }
   }
 
+  static async getAnalytics(req, res, next) {
+    try {
+      const analytics = await AgentsService.getAgentAnalytics(req.params.id);
+      return res.status(200).json({ success: true, data: analytics });
+    } catch (err) {
+      return next(err);
+    }
+  }
+
   static async getPayouts(req, res, next) {
     try {
       const payouts = await AgentsService.getAgentPayouts(req.params.id);
