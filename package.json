@@ -6,16 +6,25 @@
   "workspaces": [
     "backend",
     "frontend/design-system",
-    "apps/customer-web"
+    "apps/customer-web",
+    "apps/merchant-studio",
+    "apps/driver-fleet"
   ],
   "scripts": {
-    "test": "npm test --workspace=backend && npm test --workspace=@quikooo/design-system && npm test --workspace=customer-web",
+    "test": "npm test --workspace=backend && npm test --workspace=@quikooo/design-system && npm test --workspace=customer-web && npm test --workspace=merchant-studio && npm test --workspace=driver-fleet",
     "test:backend": "npm test --workspace=backend",
     "test:design": "npm test --workspace=@quikooo/design-system",
     "test:customer": "npm test --workspace=customer-web",
-    "build": "npm run build --workspace=customer-web",
+    "test:merchant": "npm test --workspace=merchant-studio",
+    "test:driver": "npm test --workspace=driver-fleet",
+    "build": "npm run build --workspace=customer-web && npm run build --workspace=merchant-studio && npm run build --workspace=driver-fleet",
+    "build:customer": "npm run build --workspace=customer-web",
+    "build:merchant": "npm run build --workspace=merchant-studio",
+    "build:driver": "npm run build --workspace=driver-fleet",
     "dev:backend": "npm run dev --workspace=backend",
-    "dev:customer": "npm run dev --workspace=customer-web"
+    "dev:customer": "npm run dev --workspace=customer-web",
+    "dev:merchant": "npm run dev --workspace=merchant-studio",
+    "dev:driver": "npm run dev --workspace=driver-fleet"
   },
   "keywords": [
     "hyperlocal",

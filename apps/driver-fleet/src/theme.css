@@ -1,0 +1,248 @@
+@import "../../../frontend/design-system/tokens.css";
+@import "../../../frontend/design-system/typography.css";
+@import "../../../frontend/design-system/components.css";
+
+/* Reset & Box Sizing */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--color-canvas-bg, #FBFBF9);
+  color: var(--color-text-primary, #111827);
+  font-family: var(--font-family-body, 'Plus Jakarta Sans', sans-serif);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Mobile-First Shell Constraint per Rule 3 */
+.app-viewport {
+  min-height: 100vh;
+  background-color: var(--color-canvas-bg, #FBFBF9);
+  display: flex;
+  justify-content: center;
+}
+
+.mobile-shell {
+  width: 100%;
+  max-width: 480px;
+  min-height: 100vh;
+  background-color: #FFFFFF;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.06);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  padding-bottom: 5rem;
+}
+
+/* Top Navigation Banner */
+.top-nav {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background-color: var(--color-brand-primary, #059669);
+  color: #FFFFFF;
+  padding: 0.875rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: var(--shadow-sm);
+}
+
+.brand-title {
+  font-family: var(--font-family-display, 'Outfit', sans-serif);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #FFFFFF;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.brand-pill {
+  font-size: 0.65rem;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 0.15rem 0.4rem;
+  border-radius: 9999px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* Bottom Tab Navigation */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 480px;
+  background-color: #FFFFFF;
+  border-top: 1px solid var(--color-surface-subtle, #F3F4F0);
+  display: flex;
+  justify-content: space-around;
+  padding: 0.5rem 0;
+  z-index: 50;
+  box-shadow: 0 -4px 10px rgba(0, 0, 0, 0.03);
+}
+
+.nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-secondary, #4B5563);
+  text-decoration: none;
+  gap: 0.2rem;
+  padding: 0.25rem 0.5rem;
+  position: relative;
+}
+
+.nav-item.active {
+  color: var(--color-brand-primary, #059669);
+}
+
+.badge-count {
+  position: absolute;
+  top: 0;
+  right: 0.4rem;
+  background-color: #EF4444;
+  color: #FFFFFF;
+  font-size: 0.65rem;
+  font-weight: 700;
+  border-radius: 9999px;
+  padding: 0.1rem 0.35rem;
+  min-width: 1rem;
+  text-align: center;
+}
+
+.page-content {
+  flex: 1;
+  padding: 1rem;
+}
+
+/* Duty Switch Control */
+.duty-toggle-card {
+  border-radius: var(--radius-xl, 1rem);
+  padding: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  transition: all 0.3s ease;
+}
+
+.duty-toggle-card.online {
+  background-color: #ECFDF5;
+  border: 2px solid #059669;
+}
+
+.duty-toggle-card.offline {
+  background-color: #F9FAFB;
+  border: 2px solid #D1D5DB;
+}
+
+/* Driver Task Stepper */
+.task-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  position: relative;
+  padding-bottom: 1.25rem;
+}
+
+.task-step:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 28px;
+  bottom: 0;
+  width: 2px;
+  background-color: #E5E7EB;
+}
+
+.task-step.completed:not(:last-child)::after {
+  background-color: #059669;
+}
+
+.step-marker {
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.75rem;
+  z-index: 2;
+  flex-shrink: 0;
+}
+
+.step-marker.active {
+  background-color: #059669;
+  color: #FFFFFF;
+  box-shadow: 0 0 0 4px #D1FAE5;
+}
+
+.step-marker.completed {
+  background-color: #059669;
+  color: #FFFFFF;
+}
+
+.step-marker.pending {
+  background-color: #F3F4F0;
+  color: #9CA3AF;
+  border: 1px solid #D1D5DB;
+}
+
+/* Modal Backdrop */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 1rem;
+}
+
+.modal-dialog {
+  background: #FFFFFF;
+  border-radius: var(--radius-xl, 1rem);
+  width: 100%;
+  max-width: 400px;
+  padding: 1.5rem;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+}
+
+/* Utility Helpers */
+.flex-row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.flex-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.gap-1 { gap: 0.25rem; }
+.gap-2 { gap: 0.5rem; }
+.gap-3 { gap: 0.75rem; }
+.gap-4 { gap: 1rem; }
+
+.mt-1 { margin-top: 0.25rem; }
+.mt-2 { margin-top: 0.5rem; }
+.mt-3 { margin-top: 0.75rem; }
+.mt-4 { margin-top: 1rem; }
+.mb-2 { margin-bottom: 0.5rem; }
+.mb-3 { margin-bottom: 0.75rem; }
+.mb-4 { margin-bottom: 1rem; }

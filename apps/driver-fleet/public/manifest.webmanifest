@@ -1,0 +1,32 @@
+{
+  "name": "Quikooo Driver Fleet | Rider Partner Cockpit",
+  "short_name": "Driver Cockpit",
+  "description": "Rider Partner Cockpit for deliveries, duty status, and instant payouts.",
+  "start_url": "/driver",
+  "display": "standalone",
+  "background_color": "#FBFBF9",
+  "theme_color": "#059669",
+  "lang": "en",
+  "scope": "/",
+  "id": "/driver",
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
