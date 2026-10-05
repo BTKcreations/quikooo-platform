@@ -6,6 +6,7 @@ import OfflineBanner from './components/OfflineBanner.jsx';
 import { SkeletonPage } from './components/Skeleton.jsx';
 import CartDrawer from './components/CartDrawer.jsx';
 import SupportModal from './components/SupportModal.jsx';
+import CommandPalette from './components/CommandPalette.jsx';
 import { ToastProvider } from './components/Toast.jsx';
 import { useCart } from './store/cart.js';
 import './theme.css';
@@ -22,6 +23,7 @@ export default function App() {
   const cart = useCart();
   const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
   const [isSupportOpen, setIsSupportOpen] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
 
   const isCurrent = (path) => {
     if (path === '/customer' && (location.pathname === '/' || location.pathname === '/customer')) {
@@ -54,6 +56,24 @@ export default function App() {
             </PrefetchLink>
 
             <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', flex: 1 }}>
+              <button
+                onClick={() => setIsCommandPaletteOpen(true)}
+                className="sidebar-nav-item"
+                style={{
+                  background: '#F9FAFB',
+                  border: '1px solid #E5E7EB',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  width: '100%',
+                  marginBottom: '0.2rem',
+                }}
+                aria-label="Open command palette (Ctrl+K)"
+              >
+                <span style={{ fontSize: '1.2rem' }}>⚡</span>
+                <span style={{ flex: 1 }}>Command Menu</span>
+                <kbd style={{ fontSize: '0.65rem', background: '#E5E7EB', padding: '0.15rem 0.35rem', borderRadius: '4px', border: '1px solid #D1D5DB' }}>Ctrl+K</kbd>
+              </button>
+
               <PrefetchLink
                 to="/customer"
                 prefetch={() => import('./pages/CustomerHome.jsx')}
@@ -117,6 +137,30 @@ export default function App() {
               </PrefetchLink>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                {/* Command Palette Trigger */}
+                <button
+                  onClick={() => setIsCommandPaletteOpen(true)}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.2)',
+                    border: 'none',
+                    borderRadius: '9999px',
+                    color: '#FFFFFF',
+                    padding: '0.35rem 0.65rem',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.3rem',
+                    minHeight: '44px',
+                  }}
+                  aria-label="Open command palette (Ctrl+K)"
+                >
+                  <span>⚡</span>
+                  <span>Menu</span>
+                  <span style={{ fontSize: '0.65rem', opacity: 0.85, background: 'rgba(0,0,0,0.2)', padding: '0.1rem 0.3rem', borderRadius: '4px' }}>⌘K</span>
+                </button>
+
                 {/* Persistent Support Entry */}
                 <button
                   onClick={() => setIsSupportOpen(true)}
@@ -243,8 +287,18 @@ export default function App() {
             isOpen={isSupportOpen}
             onClose={() => setIsSupportOpen(false)}
           />
+
+          {/* Power User Command Palette (Ctrl+K) */}
+          <CommandPalette
+            isOpen={isCommandPaletteOpen}
+            onClose={() => setIsCommandPaletteOpen(false)}
+            onAction={(action) => {
+              if (action === 'support') setIsSupportOpen(true);
+            }}
+          />
         </div>
       </div>
     </ToastProvider>
+
   );
 }

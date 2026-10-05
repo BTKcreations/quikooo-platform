@@ -4,6 +4,8 @@ import { getVendorById, getVendorProducts } from '../api.js';
 import { useCart } from '../store/cart.js';
 import { useToast } from '../components/Toast.jsx';
 import { SkeletonCard } from '../components/Skeleton.jsx';
+import { useVirtualList } from '../lib/virtualList.js';
+import OptimizedImage from '../components/OptimizedImage.jsx';
 
 export default function StorePage() {
   const { id } = useParams();
@@ -15,7 +17,6 @@ export default function StorePage() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [conflictModal, setConflictModal] = useState(null);
-  const [visibleCount, setVisibleCount] = useState(20);
 
   useEffect(() => {
     async function loadStore() {
@@ -146,7 +147,13 @@ export default function StorePage() {
     );
   }
 
-  const displayedProducts = products.slice(0, visibleCount);
+  const {
+    displayedItems: displayedProducts,
+    sentinelRef,
+    hasMore,
+    loadMore,
+    visibleCount,
+  } = useVirtualList({ items: products, initialCount: 30, step: 15 });
 
   return (
     <div className="page-content">
@@ -248,25 +255,20 @@ export default function StorePage() {
               }}
             >
               <div>
-                {/* Lazy-loaded product image */}
+                {/* Lazy-loaded product image with async decoding and skeleton */}
                 <div
                   style={{
                     height: '120px',
                     borderRadius: '0.5rem',
                     overflow: 'hidden',
                     marginBottom: '0.75rem',
-                    backgroundColor: '#E5E7EB',
+                    position: 'relative',
                   }}
                 >
-                  <img
+                  <OptimizedImage
                     src={product.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300&q=80'}
                     alt={product.name}
-                    loading="lazy"
-                    decoding="async"
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    onError={(e) => {
-                      e.target.style.display = 'none';
-                    }}
+                    aspectRatio="16/9"
                   />
                 </div>
 
@@ -366,11 +368,19 @@ export default function StorePage() {
         })}
       </div>
 
-      {/* Pagination / Limit Render: Load More */}
-      {products.length > visibleCount && (
-        <div style={{ textAlign: 'center', marginTop: '1.5rem' }}>
+      {/* IntersectionObserver Sentinel for Infinite / Windowed Loading */}
+      {hasMore && (
+        <div
+          ref={sentinelRef}
+          style={{
+            textAlign: 'center',
+            padding: '1.5rem 0',
+            color: '#6B7280',
+            fontSize: '0.85rem',
+          }}
+        >
           <button
-            onClick={() => setVisibleCount((prev) => prev + 20)}
+            onClick={loadMore}
             className="btn-secondary"
             style={{ minHeight: '44px', padding: '0.5rem 1.5rem' }}
           >
@@ -378,6 +388,7 @@ export default function StorePage() {
           </button>
         </div>
       )}
+
 
       {/* Single-Vendor Cart Conflict Modal */}
       {conflictModal && (

@@ -6,6 +6,11 @@ import PredictiveSearch, { fuzzyMatch } from '../components/PredictiveSearch.jsx
 import MapView from '../components/MapView.jsx';
 import { SkeletonList } from '../components/Skeleton.jsx';
 import EmptyState from '../components/EmptyState.jsx';
+import BuyAgain from '../components/BuyAgain.jsx';
+import { ActiveOrderBanner } from '../components/CountdownTimer.jsx';
+import FilterDrawer, { applyFilters, countActiveFilters } from '../components/FilterDrawer.jsx';
+import { useVirtualList } from '../lib/virtualList.js';
+import OptimizedImage from '../components/OptimizedImage.jsx';
 import { useCart } from '../store/cart.js';
 import { useToast } from '../components/Toast.jsx';
 import { getVendors } from '../api.js';
@@ -20,19 +25,6 @@ const CATEGORIES = [
   { id: 'desserts', label: 'Desserts & Sweets', icon: '🍧' },
 ];
 
-const RECENT_ORDERS = [
-  {
-    id: 'ord-recent-1',
-    vendorId: 'vendor-sample-1',
-    vendorName: 'Curry & Spice Express',
-    items: [
-      { productId: 'prod-101', name: 'Paneer Butter Masala', quantity: 1, originalPrice: 100, customerMenuPrice: 105 },
-    ],
-    totalAmount: 135.0,
-    date: 'Yesterday, 8:15 PM',
-  },
-];
-
 export default function CustomerHome() {
   const navigate = useNavigate();
   const cart = useCart();
@@ -43,8 +35,18 @@ export default function CustomerHome() {
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('all');
-  const [visibleCount, setVisibleCount] = useState(20);
-  const [showMap, setShowMap] = useState(true);
+  const [showMap, setShowMap] = useState(false);
+  const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
+
+  // Advanced Filter state
+  const [filterCriteria, setFilterCriteria] = useState({
+    categories: [],
+    maxPrice: 1000,
+    minRating: 0,
+    inStockOnly: false,
+    fastDeliveryOnly: false,
+  });
+
   const [currentLocation, setCurrentLocation] = useState(() => {
     try {
       if (typeof window !== 'undefined') {
@@ -57,6 +59,60 @@ export default function CustomerHome() {
     } catch (_) {}
     return { name: 'Indiranagar 100ft Road', city: 'Bengaluru', lat: 12.9784, lng: 77.6408, zone: 'URBAN' };
   });
+
+  useEffect(() => {
+    async function loadVendors() {
+      try {
+        setLoading(true);
+        const data = await getVendors();
+        setVendors(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error('Failed to load vendors from API:', err.message);
+        setVendors([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadVendors();
+  }, []);
+
+  // Filter vendors with typo-tolerant predictive matching, category chips, and FilterDrawer rules
+  const filteredVendors = useMemo(() => {
+    // 1. Initial filter by search query & active category chip
+    let base = vendors.filter((v) => {
+      // Category chip check
+      if (activeCategory !== 'all') {
+        const catObj = CATEGORIES.find((c) => c.id === activeCategory);
+        const matchCategory =
+          (v.cuisine && v.cuisine.toLowerCase().includes(activeCategory)) ||
+          (catObj && v.cuisine && v.cuisine.toLowerCase().includes(catObj.label.toLowerCase())) ||
+          (activeCategory === 'grocery' && v.businessType === 'GROCERY');
+        if (!matchCategory) return false;
+      }
+
+      // Search query typo-tolerant match
+      if (!searchQuery.trim()) return true;
+      return (
+        fuzzyMatch(searchQuery, v.name) ||
+        (v.cuisine && fuzzyMatch(searchQuery, v.cuisine)) ||
+        (v.businessType && fuzzyMatch(searchQuery, v.businessType))
+      );
+    });
+
+    // 2. Apply advanced Drawer Filters (categories, maxPrice, rating, inStock)
+    return applyFilters(base, filterCriteria);
+  }, [vendors, searchQuery, activeCategory, filterCriteria]);
+
+  // Windowed virtual list: render first 30 + load more via IntersectionObserver
+  const {
+    displayedItems: displayedVendors,
+    sentinelRef,
+    hasMore,
+    loadMore,
+    visibleCount,
+  } = useVirtualList({ items: filteredVendors, initialCount: 30, step: 15 });
+
+  const activeFilterCount = countActiveFilters(filterCriteria, 1000);
 
   const vendorMarkers = useMemo(() => {
     const baseLat = currentLocation?.lat || 12.9784;
@@ -96,64 +152,13 @@ export default function CustomerHome() {
     return markers;
   }, [currentLocation, filteredVendors, navigate]);
 
-  useEffect(() => {
-    async function loadVendors() {
-      try {
-        setLoading(true);
-        const data = await getVendors();
-        setVendors(Array.isArray(data) ? data : []);
-      } catch (err) {
-        console.error('Failed to load vendors from API:', err.message);
-        setVendors([]);
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadVendors();
-  }, []);
-
-  // Filter vendors with typo-tolerant predictive matching and category filtering
-  const filteredVendors = useMemo(() => {
-    return vendors.filter((v) => {
-      // Category check
-      if (activeCategory !== 'all') {
-        const catObj = CATEGORIES.find((c) => c.id === activeCategory);
-        const matchCategory =
-          (v.cuisine && v.cuisine.toLowerCase().includes(activeCategory)) ||
-          (catObj && v.cuisine && v.cuisine.toLowerCase().includes(catObj.label.toLowerCase())) ||
-          (activeCategory === 'grocery' && v.businessType === 'GROCERY');
-        if (!matchCategory) return false;
-      }
-
-      // Search query typo-tolerant match
-      if (!searchQuery.trim()) return true;
-      return (
-        fuzzyMatch(searchQuery, v.name) ||
-        (v.cuisine && fuzzyMatch(searchQuery, v.cuisine)) ||
-        (v.businessType && fuzzyMatch(searchQuery, v.businessType))
-      );
-    });
-  }, [vendors, searchQuery, activeCategory]);
-
-  const displayedVendors = filteredVendors.slice(0, visibleCount);
-
-  const handleOneTapReorder = (order) => {
-    try {
-      cart.reorder(
-        order.items,
-        { id: order.vendorId, name: order.vendorName }
-      );
-      showToast(`Items from ${order.vendorName} added to cart!`, 'success');
-      navigate('/cart');
-    } catch (err) {
-      showToast(err.message, 'error');
-    }
-  };
-
   return (
     <div className="page-content">
       {/* 1. Location Bar First */}
       <LocationBar onLocationChange={(newLoc) => setCurrentLocation(newLoc)} />
+
+      {/* 2. Live Order ETA Countdown Banner when active order */}
+      <ActiveOrderBanner onTrack={(ord) => navigate(`/orders?id=${ord.id || ord.orderNumber}`)} />
 
       {/* Real Map View with 2km Geofence & ZoneService filter note */}
       <div style={{ marginBottom: '1.25rem' }}>
@@ -173,7 +178,7 @@ export default function CustomerHome() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
             <span style={{ fontSize: '1.2rem', flexShrink: 0 }}>🎯</span>
             <div style={{ fontSize: '0.78rem', color: '#065F46', lineHeight: 1.4 }}>
-              <strong>Hyperlocal 2.0 km Geofence Active:</strong> Verified by Quikooo ZoneService (Haversine formula distance check / PostGIS ST_DWithin query). Only verified kitchens within 2.0 km delivery promise radius are displayed.
+              <strong>Hyperlocal 2.0 km Geofence Active:</strong> Verified by Quikooo ZoneService. Only verified kitchens within 2.0 km delivery promise radius are displayed.
             </div>
           </div>
           <button
@@ -197,14 +202,56 @@ export default function CustomerHome() {
         )}
       </div>
 
-      {/* 2. Predictive Search (recent + popular + typo-tolerant) */}
-      <PredictiveSearch
-        value={searchQuery}
-        onChange={setSearchQuery}
-        onSelectQuery={(q) => setSearchQuery(q)}
-      />
+      {/* 3. Predictive Search (prior-order boost + recent + voice input) */}
+      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
+        <div style={{ flex: 1 }}>
+          <PredictiveSearch
+            value={searchQuery}
+            onChange={setSearchQuery}
+            onSelectQuery={(q) => setSearchQuery(q)}
+          />
+        </div>
 
-      {/* 3. Category Chips with Photos/Emojis */}
+        {/* Filter Drawer Trigger Button */}
+        <button
+          onClick={() => setIsFilterDrawerOpen(true)}
+          className="btn-secondary"
+          style={{
+            minHeight: '44px',
+            padding: '0.5rem 0.85rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.35rem',
+            borderRadius: '0.5rem',
+            border: activeFilterCount > 0 ? '1.5px solid #059669' : '1px solid #D1D5DB',
+            backgroundColor: activeFilterCount > 0 ? '#ECFDF5' : '#FFFFFF',
+            color: activeFilterCount > 0 ? '#065F46' : '#374151',
+            flexShrink: 0,
+          }}
+          aria-label={`Open filter drawer. ${activeFilterCount} active filters.`}
+        >
+          <span>🎛️</span>
+          <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Filters</span>
+          {activeFilterCount > 0 && (
+            <span
+              style={{
+                backgroundColor: '#059669',
+                color: '#FFFFFF',
+                borderRadius: '9999px',
+                fontSize: '0.7rem',
+                fontWeight: 700,
+                padding: '0.1rem 0.4rem',
+                minWidth: '1.2rem',
+                textAlign: 'center',
+              }}
+            >
+              {activeFilterCount}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* 4. Category Chips with Photos/Emojis */}
       <div
         style={{
           display: 'flex',
@@ -245,45 +292,8 @@ export default function CustomerHome() {
         })}
       </div>
 
-      {/* 4. Reorder Shortcuts (One-tap previous order) */}
-      {RECENT_ORDERS.length > 0 && !searchQuery && (
-        <div style={{ marginBottom: '1.25rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#374151', textTransform: 'uppercase' }}>
-              ⚡ Order Again in 1-Tap
-            </span>
-          </div>
-          {RECENT_ORDERS.map((ord) => (
-            <div
-              key={ord.id}
-              className="card"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '0.75rem 1rem',
-                borderLeft: '4px solid #059669',
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#111827' }}>
-                  {ord.vendorName}
-                </div>
-                <div style={{ fontSize: '0.75rem', color: '#4B5563' }}>
-                  {ord.items.map((i) => `${i.quantity}x ${i.name}`).join(', ')} • ₹{ord.totalAmount}
-                </div>
-              </div>
-              <button
-                onClick={() => handleOneTapReorder(ord)}
-                className="btn-primary btn-sm"
-                style={{ minHeight: '44px', padding: '0.4rem 0.85rem' }}
-              >
-                Reorder ₹{ord.totalAmount}
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* 5. Buy Again: Horizontal Carousel from Order History */}
+      {!searchQuery && <BuyAgain />}
 
       {/* Transparent Pricing Ribbon */}
       <div
@@ -330,16 +340,23 @@ export default function CustomerHome() {
         <EmptyState
           icon="🔍"
           title="No stores found"
-          description={`We couldn't find any results matching "${searchQuery}". Try searching for Biryani, Paneer, or Groceries.`}
-          actionText="Clear Search"
+          description={`We couldn't find any results matching your search or filters. Try adjusting categories or clearing search.`}
+          actionText="Clear All Filters"
           onAction={() => {
             setSearchQuery('');
             setActiveCategory('all');
+            setFilterCriteria({
+              categories: [],
+              maxPrice: 1000,
+              minRating: 0,
+              inStockOnly: false,
+              fastDeliveryOnly: false,
+            });
           }}
         />
       )}
 
-      {/* Vendors Grid / List (Mobile 1-col, Tablet 2-col, Desktop 3-col) */}
+      {/* Vendors Grid: Windowed Virtual List with Optimized Images */}
       <div className="grid-cards">
         {displayedVendors.map((vendor) => (
           <PrefetchLink
@@ -361,26 +378,20 @@ export default function CustomerHome() {
               }}
             >
               <div>
-                {/* Store image placeholder with loading="lazy" & decoding="async" */}
+                {/* Store image with lazy loading, async decoding & skeleton placeholder */}
                 <div
                   style={{
                     height: '130px',
                     borderRadius: '0.5rem',
                     overflow: 'hidden',
                     marginBottom: '0.75rem',
-                    backgroundColor: '#E5E7EB',
                     position: 'relative',
                   }}
                 >
-                  <img
+                  <OptimizedImage
                     src={vendor.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&q=80'}
                     alt={vendor.name}
-                    loading="lazy"
-                    decoding="async"
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    onError={(e) => {
-                      e.target.style.display = 'none';
-                    }}
+                    aspectRatio="16/9"
                   />
                   <span
                     style={{
@@ -393,6 +404,7 @@ export default function CustomerHome() {
                       fontWeight: 700,
                       padding: '0.2rem 0.5rem',
                       borderRadius: '4px',
+                      zIndex: 2,
                     }}
                   >
                     ⚡ {vendor.etaMinutes || '12'} mins
@@ -436,11 +448,19 @@ export default function CustomerHome() {
         ))}
       </div>
 
-      {/* Pagination / Limit Render: Load More (first 20 + load more) */}
-      {filteredVendors.length > visibleCount && (
-        <div style={{ textAlign: 'center', marginTop: '1.5rem' }}>
+      {/* IntersectionObserver Sentinel for Infinite / Windowed Loading */}
+      {hasMore && (
+        <div
+          ref={sentinelRef}
+          style={{
+            textAlign: 'center',
+            padding: '1.5rem 0',
+            color: '#6B7280',
+            fontSize: '0.85rem',
+          }}
+        >
           <button
-            onClick={() => setVisibleCount((prev) => prev + 20)}
+            onClick={loadMore}
             className="btn-secondary"
             style={{ minHeight: '44px', padding: '0.5rem 1.5rem' }}
           >
@@ -448,6 +468,14 @@ export default function CustomerHome() {
           </button>
         </div>
       )}
+
+      {/* Filter Drawer (Left slide-over on mobile) */}
+      <FilterDrawer
+        isOpen={isFilterDrawerOpen}
+        onClose={() => setIsFilterDrawerOpen(false)}
+        initialFilters={filterCriteria}
+        onApply={(newFilters) => setFilterCriteria(newFilters)}
+      />
     </div>
   );
 }

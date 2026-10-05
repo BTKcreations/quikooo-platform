@@ -5,6 +5,9 @@ import { useCart } from '../store/cart.js';
 import { useToast } from '../components/Toast.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import { SkeletonCard } from '../components/Skeleton.jsx';
+import CountdownTimer, { formatCountdown } from '../components/CountdownTimer.jsx';
+import SubstitutionCard from '../components/SubstitutionCard.jsx';
+import RatingReorder from '../components/RatingReorder.jsx';
 
 const TIMELINE_STAGES = [
   { id: 'ORDER_PLACED', label: 'Order Placed', icon: '📝', detail: 'Received by Quikooo system' },
@@ -36,12 +39,6 @@ export default function OrdersPage() {
     }, 1000);
     return () => clearInterval(timer);
   }, []);
-
-  const formatCountdown = (secs) => {
-    const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    return `${m}:${s < 10 ? '0' : ''}${s}`;
-  };
 
   useEffect(() => {
     async function loadOrdersData() {
@@ -75,10 +72,11 @@ export default function OrdersPage() {
         }
 
         const list = await listOrders().catch(() => []);
+        let resolvedPast = [];
         if (list && list.length > 0) {
-          setPastOrders(list);
+          resolvedPast = list;
         } else {
-          setPastOrders([
+          resolvedPast = [
             {
               id: 'ord-prev-1',
               orderNumber: 'QK-ORD-9281',
@@ -103,8 +101,16 @@ export default function OrdersPage() {
                 { productId: 'prod-101', name: 'Paneer Butter Masala', quantity: 2, originalPrice: 100, customerMenuPrice: 105 },
               ],
             },
-          ]);
+          ];
         }
+        setPastOrders(resolvedPast);
+
+        // Synchronize with localStorage for BuyAgain carousel
+        try {
+          if (typeof window !== 'undefined' && !localStorage.getItem('quikooo_orders')) {
+            localStorage.setItem('quikooo_orders', JSON.stringify(resolvedPast));
+          }
+        } catch {}
       } catch (err) {
         console.error('Error fetching orders:', err);
       } finally {
@@ -114,6 +120,7 @@ export default function OrdersPage() {
 
     loadOrdersData();
   }, [orderId]);
+
 
   const handleReorder = (order) => {
     try {
@@ -213,8 +220,9 @@ export default function OrdersPage() {
                 Estimated Arrival
               </div>
               <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#064E3B' }}>
-                ⏱️ {formatCountdown(etaSeconds)}
+                <CountdownTimer initialSeconds={etaSeconds} />
               </div>
+
             </div>
           </div>
 
@@ -372,9 +380,39 @@ export default function OrdersPage() {
         </div>
       )}
 
+      {/* Substitution Alert Flow (During PREPARING stage when out-of-stock occurs) */}
+      {activeOrder && activeOrder.status === 'PREPARING' && (
+        <SubstitutionCard
+          originalItem={activeOrder.items?.[0] || { id: 'prod-101', name: 'Paneer Butter Masala', price: 105, quantity: 1 }}
+          onAccept={(alt) => {
+            showToast(`Kitchen notified: Replaced with ${alt.name}`, 'success');
+          }}
+          onRefund={(orig) => {
+            showToast(`Refund of ₹${orig.price} issued to your account`, 'info');
+          }}
+        />
+      )}
+
+      {/* 1-Tap 5-Star Rating & Prominent Reorder Flow (When order is DELIVERED) */}
+      {activeOrder && activeOrder.status === 'DELIVERED' && (
+        <RatingReorder
+          order={activeOrder}
+          onReorderSuccess={(ord) => handleReorder(ord)}
+        />
+      )}
+
+      {/* Recent Delivered Order Rating & Reorder Demo (if no active order is delivered) */}
+      {!activeOrder && pastOrders.length > 0 && pastOrders[0].status === 'DELIVERED' && (
+        <RatingReorder
+          order={pastOrders[0]}
+          onReorderSuccess={(ord) => handleReorder(ord)}
+        />
+      )}
+
       {/* Past Orders Header */}
       <div className="flex-row-between" style={{ marginBottom: '0.75rem' }}>
         <h3 style={{ fontSize: '1.1rem', margin: 0, fontWeight: 700 }}>
+
           Order History & Reorders
         </h3>
         <span style={{ fontSize: '0.75rem', color: '#6B7280' }}>

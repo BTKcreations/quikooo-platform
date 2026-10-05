@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { notifyToast } from '../api.js';
 
 // Popular food & grocery quick search tags
 export const POPULAR_TAGS = ['Biryani', 'Paneer Butter', 'Garlic Naan', 'Milk & Eggs', 'Gulab Jamun', 'Healthy Bowls'];
 
 /**
  * Fuzzy / Typo-tolerant substring & edit-distance match
+ * Exact substring or 1-edit (or 2-edit for long words) distance match
  */
 export function fuzzyMatch(pattern, text) {
   if (!pattern || !text) return false;
@@ -21,7 +23,6 @@ export function fuzzyMatch(pattern, text) {
     return words.some((w) => levenshtein(term, w) <= maxDist);
   });
 }
-
 
 function levenshtein(a, b) {
   if (a === b) return 0;
@@ -58,13 +59,67 @@ export default function PredictiveSearch({ value, onChange, onSelectQuery }) {
     return ['Biryani', 'Curry'];
   });
 
+  const [priorOrderItems, setPriorOrderItems] = useState([]);
   const [isFocused, setIsFocused] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+
+  // Load prior order items from localStorage for prior-order boost
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const raw = localStorage.getItem('quikooo_orders');
+        const orders = raw ? JSON.parse(raw) : [];
+        const itemMap = new Map();
+
+        // Default prior items if none in localStorage yet
+        const defaultItems = [
+          { name: 'Paneer Butter Masala', vendorName: 'Curry & Spice Express', price: 105 },
+          { name: 'Special Chicken Biryani', vendorName: 'Curry & Spice Express', price: 210 },
+          { name: 'Garlic Butter Naan', vendorName: 'Curry & Spice Express', price: 42 },
+        ];
+
+        defaultItems.forEach((it) => itemMap.set(it.name.toLowerCase(), it));
+
+        if (Array.isArray(orders)) {
+          orders.forEach((ord) => {
+            if (Array.isArray(ord.items)) {
+              ord.items.forEach((it) => {
+                if (it && it.name) {
+                  itemMap.set(it.name.toLowerCase(), {
+                    name: it.name,
+                    vendorName: ord.vendorName || 'Previous Store',
+                    price: it.customerMenuPrice || it.originalPrice || 100,
+                  });
+                }
+              });
+            }
+          });
+        }
+
+        setPriorOrderItems(Array.from(itemMap.values()));
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Filter prior order items matching query for prior-order boost
+  const matchedPriorItems = useMemo(() => {
+    if (!value || !value.trim()) {
+      return priorOrderItems.slice(0, 3);
+    }
+    return priorOrderItems.filter((item) => fuzzyMatch(value, item.name)).slice(0, 4);
+  }, [value, priorOrderItems]);
 
   const handleSelect = (query) => {
     onChange(query);
     onSelectQuery?.(query);
-    // Add to recent
-    const updated = [query, ...recentSearches.filter((s) => s.toLowerCase() !== query.toLowerCase())].slice(0, 5);
+
+    // Add to recent searches in localStorage
+    const updated = [
+      query,
+      ...recentSearches.filter((s) => s.toLowerCase() !== query.toLowerCase()),
+    ].slice(0, 6);
     setRecentSearches(updated);
     if (typeof localStorage !== 'undefined') {
       try {
@@ -78,6 +133,55 @@ export default function PredictiveSearch({ value, onChange, onSelectQuery }) {
     setRecentSearches([]);
     if (typeof localStorage !== 'undefined') {
       localStorage.removeItem('quikooo_recent_searches');
+    }
+  };
+
+  const handleVoiceInput = () => {
+    if (typeof window === 'undefined') return;
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      notifyToast('Voice search not supported in this browser, please type your search.', 'info');
+      return;
+    }
+
+    try {
+      if (isListening) {
+        setIsListening(false);
+        return;
+      }
+
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'en-IN';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = () => {
+        setIsListening(true);
+        notifyToast('Listening... Speak your dish or grocery item', 'info');
+      };
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0]?.[0]?.transcript;
+        if (transcript) {
+          handleSelect(transcript);
+          notifyToast(`Heard: "${transcript}"`, 'success');
+        }
+      };
+
+      recognition.onerror = (err) => {
+        setIsListening(false);
+        notifyToast(`Voice input error: ${err.error || 'Check mic permission'}`, 'error');
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognition.start();
+    } catch (err) {
+      setIsListening(false);
+      notifyToast('Voice search not supported in this browser, please type your search.', 'info');
     }
   };
 
@@ -105,30 +209,60 @@ export default function PredictiveSearch({ value, onChange, onSelectQuery }) {
           onFocus={() => setIsFocused(true)}
           style={{
             paddingLeft: '2.5rem',
-            paddingRight: value ? '2.5rem' : '1rem',
+            paddingRight: '4.5rem',
             minHeight: '44px',
             fontSize: '0.9rem',
           }}
           aria-label="Search dishes and stores"
         />
-        {value && (
+
+        <div style={{ position: 'absolute', right: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+          {/* Voice Input Button */}
           <button
-            onClick={() => onChange('')}
+            type="button"
+            onClick={handleVoiceInput}
             style={{
-              position: 'absolute',
-              right: '0.75rem',
-              background: 'none',
-              border: 'none',
-              color: '#9CA3AF',
+              background: isListening ? '#FEE2E2' : 'none',
+              border: isListening ? '1px solid #EF4444' : 'none',
+              borderRadius: '50%',
+              width: '34px',
+              height: '34px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
               cursor: 'pointer',
+              color: isListening ? '#DC2626' : '#6B7280',
               fontSize: '1rem',
-              padding: '0.25rem',
+              transition: 'all 0.15s ease',
             }}
-            aria-label="Clear search input"
+            title={isListening ? 'Listening...' : 'Voice Search'}
+            aria-label="Voice input search"
           >
-            ✕
+            {isListening ? '🔴' : '🎙️'}
           </button>
-        )}
+
+          {/* Clear Button */}
+          {value && (
+            <button
+              onClick={() => onChange('')}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#9CA3AF',
+                cursor: 'pointer',
+                fontSize: '1rem',
+                width: '30px',
+                height: '30px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              aria-label="Clear search input"
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Predictive Dropdown Drawer */}
@@ -148,6 +282,59 @@ export default function PredictiveSearch({ value, onChange, onSelectQuery }) {
             zIndex: 50,
           }}
         >
+          {/* Prior-Order Boost (Match history first) */}
+          {matchedPriorItems.length > 0 && (
+            <div style={{ marginBottom: '0.75rem' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  color: '#065F46',
+                  textTransform: 'uppercase',
+                  marginBottom: '0.4rem',
+                }}
+              >
+                <span>⚡ Prior-Order Boost (From Your History)</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                {matchedPriorItems.map((item) => (
+                  <div
+                    key={item.name}
+                    onClick={() => handleSelect(item.name)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '0.45rem 0.65rem',
+                      borderRadius: '0.5rem',
+                      backgroundColor: '#ECFDF5',
+                      border: '1px solid #A7F3D0',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <span style={{ fontSize: '0.9rem' }}>🍽️</span>
+                      <div>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#064E3B' }}>
+                          {item.name}
+                        </span>
+                        <div style={{ fontSize: '0.7rem', color: '#047857' }}>
+                          {item.vendorName}
+                        </div>
+                      </div>
+                    </div>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#059669' }}>
+                      ₹{item.price}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Recent Searches */}
           {recentSearches.length > 0 && (
             <div style={{ marginBottom: '0.75rem' }}>
@@ -159,7 +346,7 @@ export default function PredictiveSearch({ value, onChange, onSelectQuery }) {
                   onClick={handleClearRecent}
                   style={{ background: 'none', border: 'none', color: '#9CA3AF', fontSize: '0.75rem', cursor: 'pointer' }}
                 >
-                  Clear
+                  Clear All
                 </button>
               </div>
               <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
