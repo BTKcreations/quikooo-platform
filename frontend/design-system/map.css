@@ -1,0 +1,228 @@
+/**
+ * QUIKOOO Platform Leaflet Map Styles
+ * Source of Truth: frontend/design-system/tokens.css & docs/FULL-PLATFORM-PLAN.md
+ * 
+ * Provides:
+ * - Isolated stacking context (z-index safe)
+ * - Mobile 220px / Desktop 380px heights
+ * - Mini preview map variant (160px)
+ * - Brand #059669 markers, popups, and radius rings
+ */
+
+/* Map Container Stacking Context & Sizing */
+.quikooo-map-container,
+.leaflet-container {
+  position: relative;
+  width: 100%;
+  height: 220px;
+  min-height: 220px;
+  border-radius: var(--radius-lg, 0.75rem);
+  overflow: hidden;
+  border: 1px solid var(--color-surface-subtle, #E5E7EB);
+  background-color: var(--color-canvas-bg, #FBFBF9);
+  font-family: var(--font-family-body, 'Plus Jakarta Sans', sans-serif);
+  /* Isolate stacking context so Leaflet panes never punch through app modals / bars */
+  isolation: isolate;
+  z-index: 1;
+}
+
+@media (min-width: 768px) {
+  .quikooo-map-container,
+  .leaflet-container {
+    height: 380px;
+    min-height: 380px;
+  }
+}
+
+/* Mini preview map for LocationBar dropdown & widgets */
+.quikooo-map-container.map-mini,
+.leaflet-container.map-mini {
+  height: 160px;
+  min-height: 160px;
+}
+
+/* Z-Index Safety Overrides: Leaflet controls and panes clamped safely below app overlays */
+.quikooo-map-container .leaflet-pane {
+  z-index: 10;
+}
+
+.quikooo-map-container .leaflet-tile-pane {
+  z-index: 5;
+}
+
+.quikooo-map-container .leaflet-overlay-pane {
+  z-index: 10;
+}
+
+.quikooo-map-container .leaflet-shadow-pane {
+  z-index: 11;
+}
+
+.quikooo-map-container .leaflet-marker-pane {
+  z-index: 12;
+}
+
+.quikooo-map-container .leaflet-tooltip-pane {
+  z-index: 14;
+}
+
+.quikooo-map-container .leaflet-popup-pane {
+  z-index: 16;
+}
+
+.quikooo-map-container .leaflet-top,
+.quikooo-map-container .leaflet-bottom {
+  z-index: 15 !important;
+}
+
+/* Zoom controls: styled with brand accent */
+.quikooo-map-container .leaflet-bar {
+  border: none;
+  box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.08));
+  border-radius: var(--radius-md, 0.5rem);
+  overflow: hidden;
+}
+
+.quikooo-map-container .leaflet-bar a {
+  background-color: #FFFFFF;
+  color: var(--color-brand-primary, #059669);
+  border-bottom: 1px solid var(--color-surface-subtle, #F3F4F0);
+  font-weight: 700;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.quikooo-map-container .leaflet-bar a:hover {
+  background-color: var(--color-brand-light-50, #ECFDF5);
+  color: var(--color-brand-dark, #064E3B);
+}
+
+/* Leaflet Attribution: clean and non-intrusive */
+.quikooo-map-container .leaflet-control-attribution {
+  background-color: rgba(255, 255, 255, 0.85);
+  color: var(--color-text-secondary, #4B5563);
+  font-size: 0.65rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.quikooo-map-container .leaflet-control-attribution a {
+  color: var(--color-brand-primary, #059669);
+  text-decoration: none;
+}
+
+.quikooo-map-container .leaflet-control-attribution a:hover {
+  text-decoration: underline;
+}
+
+/* Marker Popup Brand Styling */
+.quikooo-map-container .leaflet-popup-content-wrapper {
+  background-color: #FFFFFF;
+  color: var(--color-text-primary, #111827);
+  border-radius: var(--radius-md, 0.5rem);
+  box-shadow: 0 8px 24px rgba(5, 150, 105, 0.18);
+  border-left: 4px solid var(--color-brand-primary, #059669);
+  padding: 0;
+  overflow: hidden;
+  font-family: var(--font-family-body, 'Plus Jakarta Sans', sans-serif);
+}
+
+.quikooo-map-container .leaflet-popup-content {
+  margin: 0.75rem 1rem;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.quikooo-map-container .leaflet-popup-tip-container {
+  overflow: visible;
+}
+
+.quikooo-map-container .leaflet-popup-tip {
+  background-color: #FFFFFF;
+  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.1);
+}
+
+.quikooo-map-container .leaflet-popup-close-button {
+  color: var(--color-brand-primary, #059669) !important;
+  padding: 6px !important;
+  font-size: 1.1rem !important;
+  font-weight: 700 !important;
+}
+
+/* Custom DivIcon Pin Styles */
+.quikooo-pin-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translate(-50%, -100%);
+  cursor: pointer;
+}
+
+.quikooo-pin-pulse {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background-color: rgba(5, 150, 105, 0.25);
+  animation: map-pulse 2s infinite ease-out;
+  pointer-events: none;
+}
+
+@keyframes map-pulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+.quikooo-pin-badge {
+  background-color: var(--color-brand-primary, #059669);
+  color: #FFFFFF;
+  border-radius: 9999px;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* Map Loading Skeleton Fallback */
+.map-skeleton-placeholder {
+  width: 100%;
+  height: 220px;
+  border-radius: var(--radius-lg, 0.75rem);
+  background: linear-gradient(90deg, #F3F4F0 25%, #E5E7EB 50%, #F3F4F0 75%);
+  background-size: 200% 100%;
+  animation: map-shimmer 1.5s infinite;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary, #4B5563);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+@media (min-width: 768px) {
+  .map-skeleton-placeholder {
+    height: 380px;
+  }
+}
+
+.map-skeleton-placeholder.map-mini {
+  height: 160px;
+}
+
+@keyframes map-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}

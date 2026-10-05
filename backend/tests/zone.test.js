@@ -54,4 +54,53 @@ describe('ZoneService Tests', () => {
       expect(batch.timezone).toBe('Asia/Kolkata');
     });
   });
+
+  describe('GeoJSON Boundaries & Spatial Helpers', () => {
+    const { pointInRadius, buildDeliveryQuery } = require('../src/modules/zones/zones.geo');
+
+    test('getGeoJsonBoundary returns valid GeoJSON polygon feature', () => {
+      const boundary = ZoneService.getGeoJsonBoundary('zone-rural-1');
+      expect(boundary.type).toBe('Feature');
+      expect(boundary.geometry.type).toBe('Polygon');
+      expect(Array.isArray(boundary.geometry.coordinates[0])).toBe(true);
+      expect(boundary.geometry.coordinates[0].length).toBe(5); // closed ring
+      expect(boundary.properties.zoneType).toBe('RURAL');
+      expect(boundary.properties.radiusKm).toBe(15.0);
+    });
+
+    test('pointInRadius verifies points inside and outside radius', () => {
+      // 1.1 km apart
+      expect(pointInRadius(12.9716, 77.5946, 12.9816, 77.5946, 2.0)).toBe(true);
+      // 11 km apart
+      expect(pointInRadius(12.9716, 77.5946, 13.0716, 77.5946, 2.0)).toBe(false);
+    });
+
+    test('buildDeliveryQuery generates PostGIS parameterized SQL when usePostgis=true', () => {
+      const query = buildDeliveryQuery({
+        customerLat: 12.9716,
+        customerLng: 77.5946,
+        radiusKm: 2.0,
+        usePostgis: true,
+      });
+
+      expect(query.isPostgis).toBe(true);
+      expect(query.text).toContain('ST_DWithin');
+      expect(query.text).toContain('ST_MakePoint');
+      expect(query.values).toEqual([77.5946, 12.9716, 2000, true]);
+    });
+
+    test('buildDeliveryQuery generates Haversine SQL fallback when usePostgis=false', () => {
+      const query = buildDeliveryQuery({
+        customerLat: 12.9716,
+        customerLng: 77.5946,
+        radiusKm: 2.0,
+        usePostgis: false,
+      });
+
+      expect(query.isPostgis).toBe(false);
+      expect(query.text).toContain('acos');
+      expect(query.text).toContain('radians');
+      expect(query.values).toEqual([12.9716, 77.5946, 2.0, true]);
+    });
+  });
 });

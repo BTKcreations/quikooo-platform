@@ -1,6 +1,7 @@
 @import "../../../frontend/design-system/tokens.css";
 @import "../../../frontend/design-system/typography.css";
 @import "../../../frontend/design-system/components.css";
+@import "../../../frontend/design-system/map.css";
 
 /* Reset & Box Sizing */
 *, *::before, *::after {

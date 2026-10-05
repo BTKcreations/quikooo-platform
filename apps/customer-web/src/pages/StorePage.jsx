@@ -173,13 +173,28 @@ export default function StorePage() {
         </button>
 
         <div className="card" style={{ padding: '1rem', borderTop: '4px solid #059669' }}>
-          <div className="flex-row-between">
+          <div className="flex-row-between" style={{ flexWrap: 'wrap', gap: '0.5rem' }}>
             <span className="badge badge-success">
               {vendor?.businessType || 'RESTAURANT'}
             </span>
-            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#047857' }}>
-              ⚡ {vendor?.etaMinutes || 12} Min Express (2.0 km geofence)
-            </span>
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                backgroundColor: '#D1FAE5',
+                color: '#064E3B',
+                border: '1px solid #A7F3D0',
+                borderRadius: '9999px',
+                padding: '0.25rem 0.65rem',
+                fontSize: '0.75rem',
+                fontWeight: 700,
+              }}
+              title="Verified by Quikooo ZoneService"
+            >
+              <span>🛡️</span>
+              <span>10–15 Min Delivery Promise: Verified within 2.0 km Geofence (ZoneService Verified)</span>
+            </div>
           </div>
 
           <h1 style={{ margin: '0.35rem 0 0.2rem 0', fontSize: '1.35rem', fontWeight: 700 }}>

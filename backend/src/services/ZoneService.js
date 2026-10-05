@@ -149,6 +149,49 @@ class ZoneService {
       timezone: config.zones.timezone,
     };
   }
+
+  /**
+   * Returns a GeoJSON Feature representing the zone boundary polygon stub.
+   * 
+   * In production PostgreSQL with PostGIS:
+   * ```sql
+   * SELECT ST_AsGeoJSON(boundary) AS geojson 
+   * FROM zones 
+   * WHERE id = $1;
+   * ```
+   * 
+   * @param {string} [zoneId='zone-rural-1']
+   * @returns {Object} GeoJSON Feature
+   */
+  static getGeoJsonBoundary(zoneId = 'zone-rural-1') {
+    const isRural = String(zoneId).includes('rural') || String(zoneId).includes('RUR');
+    const centerLat = isRural ? 12.5244 : 12.9784;
+    const centerLng = isRural ? 76.8958 : 77.6408;
+    const delta = isRural ? 0.135 : 0.018; // ~15km radius for rural, ~2km for urban
+
+    return {
+      type: 'Feature',
+      properties: {
+        zoneId,
+        zoneType: isRural ? ZONE_TYPES.RURAL : ZONE_TYPES.URBAN,
+        radiusKm: isRural ? 15.0 : 2.0,
+        center: [centerLat, centerLng],
+        name: isRural ? 'Mandya Rural Cluster' : 'Indiranagar Urban Node',
+      },
+      geometry: {
+        type: 'Polygon',
+        coordinates: [
+          [
+            [centerLng - delta, centerLat - delta],
+            [centerLng + delta, centerLat - delta],
+            [centerLng + delta, centerLat + delta],
+            [centerLng - delta, centerLat + delta],
+            [centerLng - delta, centerLat - delta],
+          ],
+        ],
+      },
+    };
+  }
 }
 
 module.exports = ZoneService;

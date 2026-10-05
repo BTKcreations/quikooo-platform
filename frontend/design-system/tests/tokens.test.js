@@ -41,4 +41,25 @@ describe('Design System Theme Tokens', () => {
     assert.ok(content.includes('Outfit'), 'tokens.css must specify Outfit font');
     assert.ok(content.includes('Plus Jakarta Sans'), 'tokens.css must specify Plus Jakarta Sans font');
   });
+
+  describe('Leaflet Map CSS Tokens & Isolation', () => {
+    const mapCssPath = path.resolve(__dirname, '../map.css');
+
+    test('map.css file exists', () => {
+      assert.ok(fs.existsSync(mapCssPath), 'map.css must exist');
+    });
+
+    test('map.css defines quikooo-map-container with mobile and desktop heights', () => {
+      const content = fs.readFileSync(mapCssPath, 'utf8');
+      assert.ok(content.includes('.quikooo-map-container'), 'Must define .quikooo-map-container');
+      assert.ok(content.includes('220px'), 'Must define mobile 220px height');
+      assert.ok(content.includes('380px'), 'Must define desktop 380px height');
+    });
+
+    test('map.css enforces z-index safe isolation and brand #059669 popups', () => {
+      const content = fs.readFileSync(mapCssPath, 'utf8');
+      assert.ok(content.includes('isolation: isolate'), 'Must enforce isolated stacking context');
+      assert.ok(content.includes('#059669'), 'Must style popups with brand #059669 color');
+    });
+  });
 });

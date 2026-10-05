@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   getDeliveryBatch,
   getRuralBatchOrders,
@@ -6,6 +6,7 @@ import {
   isRuralOrderEligible,
   formatINR,
 } from '../api.js';
+import MapView from '../components/MapView.jsx';
 import CountdownTimer from '../components/CountdownTimer.jsx';
 import ManifestList from '../components/ManifestList.jsx';
 import Skeleton from '../components/Skeleton.jsx';
@@ -119,6 +120,56 @@ export default function BatchPage() {
   const scheduledCount = orders.filter((o) => o.status === 'SCHEDULED_FOR_NEXT_DAY').length;
   const readyCount = orders.filter((o) => o.status === 'READY_FOR_MORNING_DISPATCH').length;
   const totalValue = orders.reduce((sum, o) => sum + (o.customerPayable || 0), 0);
+
+  const clusterMarkers = useMemo(() => {
+    const hubCenter = [12.5244, 76.8958];
+    const hamletCoords = {
+      'Gejjalagere Hamlet #2': { lat: 12.5802, lng: 76.9930 },
+      'Koppa Grama Cross': { lat: 12.5930, lng: 77.0340 },
+      'Maddur Station Outskirts': { lat: 12.5840, lng: 77.0450 },
+      'Shivalli Extension': { lat: 12.5620, lng: 76.8820 },
+      'Keragodu Cluster': { lat: 12.5990, lng: 76.9240 },
+      'Besagarahalli Gate': { lat: 12.5510, lng: 77.0120 },
+    };
+
+    const groups = {};
+    orders.forEach((o) => {
+      const area = o.village || 'Mandya Rural Area';
+      if (!groups[area]) groups[area] = [];
+      groups[area].push(o);
+    });
+
+    const markers = [
+      {
+        lat: hubCenter[0],
+        lng: hubCenter[1],
+        type: 'hub',
+        label: 'Mandya Hub (04:30 AM Aggregation)',
+        description: 'Consolidated bulk pickup point before morning village departure.',
+      },
+    ];
+
+    Object.entries(groups).forEach(([area, areaOrders], idx) => {
+      const coords = hamletCoords[area] || {
+        lat: 12.5244 + 0.035 * Math.sin(idx + 1),
+        lng: 76.8958 + 0.045 * Math.cos(idx + 1),
+      };
+
+      const scheduledInArea = areaOrders.filter((o) => o.status === 'SCHEDULED_FOR_NEXT_DAY').length;
+      const readyInArea = areaOrders.filter((o) => o.status === 'READY_FOR_MORNING_DISPATCH').length;
+
+      markers.push({
+        lat: coords.lat,
+        lng: coords.lng,
+        type: 'cluster',
+        label: area,
+        count: areaOrders.length,
+        description: `${areaOrders.length} Orders (${scheduledInArea} scheduled, ${readyInArea} ready) • Route window: 05:00 - 08:00`,
+      });
+    });
+
+    return markers;
+  }, [orders]);
 
   return (
     <div className="page-container">
@@ -285,6 +336,45 @@ export default function BatchPage() {
             </div>
           )}
           <div className="stat-meta">Aggregated farm & pantry staples</div>
+        </div>
+      </div>
+
+      {/* Rural Cluster Map View with Clustered Area Markers & Zone Boundary */}
+      <div className="card mb-4" style={{ padding: '1rem', borderTop: '4px solid #059669', marginBottom: '1.5rem' }}>
+        <div className="flex-row-between mb-2">
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <span style={{ fontSize: '1.2rem' }}>🗺️</span>
+              <h3 style={{ margin: 0, fontFamily: 'Outfit, sans-serif', fontSize: '1.05rem', color: '#111827' }}>
+                Rural Aggregation Map & Cluster Boundaries
+              </h3>
+              <span className="badge badge-success" style={{ fontSize: '0.7rem' }}>
+                15 km Zone Circle
+              </span>
+            </div>
+            <p style={{ margin: '0.2rem 0 0', fontSize: '0.75rem', color: '#6B7280' }}>
+              Consolidated order markers clustered across 6 village hamlets with central Mandya Hub dispatch point.
+            </p>
+          </div>
+
+          <div style={{ fontSize: '0.78rem', color: '#059669', fontWeight: 700 }}>
+            {orders.length} Batch Orders Clustered
+          </div>
+        </div>
+
+        <MapView
+          center={[12.5244, 76.8958]}
+          zoom={11}
+          radiusKm={15}
+          markers={clusterMarkers}
+          className="quikooo-map-container"
+          style={{ height: '280px' }}
+        />
+
+        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '0.6rem', fontSize: '0.72rem', color: '#4B5563' }}>
+          <span>🏛️ <strong>Mandya Hub:</strong> Primary bulk aggregation (04:30 AM)</span>
+          <span>🏘️ <strong>Clusters:</strong> Gejjalagere, Koppa, Maddur, Shivalli, Keragodu, Besagarahalli</span>
+          <span style={{ color: '#059669', fontWeight: 700 }}>⚡ 05:00 - 08:00 Delivery Window</span>
         </div>
       </div>
 

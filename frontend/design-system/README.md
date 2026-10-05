@@ -23,6 +23,14 @@ Shared theme tokens, typography, and component styling primitives for all QUIKOO
 - `tokens.css`: Root CSS custom properties (`--color-brand-primary`, `--color-canvas-bg`, etc.)
 - `typography.css`: Font imports and utility classes (`.font-display`, `.font-body`)
 - `components.css`: Reusable UI classes (`.btn-primary`, `.card`, `.badge`, `.input`)
+- `map.css`: Leaflet map container styles (`.quikooo-map-container`), responsive heights (mobile 220px, desktop 380px, mini 160px), z-index safety containment, and brand `#059669` popups.
+
+## Real Maps Integration (OpenStreetMap + Leaflet)
+All portal apps use OpenStreetMap + Leaflet for interactive maps (free, zero API keys required) with provider abstraction for future Google Maps swaps:
+- **Container**: `.quikooo-map-container` (z-index safe, rounded `0.75rem`, 220px mobile / 380px desktop)
+- **Mini Preview**: `.quikooo-map-container.map-mini` (160px height for location pickers)
+- **Brand Colors**: Popups styled with `#059669` emerald borders and shadows
+- **Dynamic Import**: Leaflet is dynamically imported on client mount only (`import('leaflet')`) to keep the initial page bundle lean.
 
 ## Testing
 Run unit tests verifying design tokens:
