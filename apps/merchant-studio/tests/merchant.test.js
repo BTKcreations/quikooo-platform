@@ -172,6 +172,60 @@ describe('Merchant Studio Tests', () => {
       expect(isValidPrepTime(45)).toBe(false);
       expect(isValidPrepTime('invalid')).toBe(false);
     });
+
+    it('command palette action list is non-empty and includes essential merchant routes', async () => {
+      const { DEFAULT_COMMANDS } = await import('../src/components/CommandPalette.jsx');
+      expect(Array.isArray(DEFAULT_COMMANDS)).toBe(true);
+      expect(DEFAULT_COMMANDS.length).toBeGreaterThan(0);
+
+      // Verify essential routes exist
+      const paths = DEFAULT_COMMANDS.map((c) => c.path).filter(Boolean);
+      expect(paths).toContain('/merchant');
+      expect(paths).toContain('/merchant/orders');
+      expect(paths).toContain('/merchant/payout');
+
+      // Verify each command has an id, label, and keywords
+      DEFAULT_COMMANDS.forEach((cmd) => {
+        expect(cmd.id).toBeDefined();
+        expect(cmd.label).toBeDefined();
+        expect(cmd.keywords.length).toBeGreaterThan(0);
+      });
+    });
+
+    it('paginate helper correctly slices list collections with first 30 items per page', async () => {
+      const { paginateHelper, paginateList } = await import('../src/lib/paginate.js');
+      const testItems = Array.from({ length: 75 }, (_, i) => ({ id: `ord-${i + 1}`, number: i + 1 }));
+
+      // First 30 items (page 1)
+      const page1 = paginateHelper(testItems, 1, 30);
+      expect(page1).toHaveLength(30);
+      expect(page1[0].id).toBe('ord-1');
+      expect(page1[29].id).toBe('ord-30');
+
+      // Page 2 (items 31-60)
+      const page2 = paginateHelper(testItems, 2, 30);
+      expect(page2).toHaveLength(30);
+      expect(page2[0].id).toBe('ord-31');
+      expect(page2[29].id).toBe('ord-60');
+
+      // Page 3 (remaining 15 items)
+      const page3 = paginateHelper(testItems, 3, 30);
+      expect(page3).toHaveLength(15);
+      expect(page3[0].id).toBe('ord-61');
+      expect(page3[14].id).toBe('ord-75');
+
+      // Page out of bounds
+      expect(paginateHelper(testItems, 4, 30)).toHaveLength(0);
+
+      // Edge cases: empty array and invalid page index
+      expect(paginateHelper([], 1, 30)).toEqual([]);
+      expect(paginateHelper(testItems, 0, 30)).toHaveLength(30);
+
+      // paginateList returns first 30 items
+      const first30 = paginateList(testItems, 30);
+      expect(first30).toHaveLength(30);
+      expect(first30[0].id).toBe('ord-1');
+    });
   });
 });
 

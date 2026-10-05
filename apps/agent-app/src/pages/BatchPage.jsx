@@ -27,10 +27,28 @@ export default function BatchPage() {
   const [loading, setLoading] = useState(true);
   const [dispatching, setDispatching] = useState(false);
   const [isOnline, setIsOnline] = useState(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
+  const [selectedVillage, setSelectedVillage] = useState('ALL');
 
   // Simulation controls
   const [useSimulatedClock, setUseSimulatedClock] = useState(false);
   const [simulatedTime, setSimulatedTime] = useState('20:30');
+
+  // Distinct village hamlets for 1-tap filter chips
+  const villages = useMemo(() => {
+    const list = [];
+    orders.forEach((o) => {
+      const v = o.village || o.area;
+      if (v && !list.includes(v)) {
+        list.push(v);
+      }
+    });
+    return list;
+  }, [orders]);
+
+  const villageFilteredOrders = useMemo(() => {
+    if (selectedVillage === 'ALL') return orders;
+    return orders.filter((o) => (o.village || o.area) === selectedVillage);
+  }, [orders, selectedVillage]);
 
   // Monitor network status
   useEffect(() => {
@@ -393,10 +411,91 @@ export default function BatchPage() {
             </div>
           </div>
 
+          {/* Village Filter Chips */}
+          <div
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: '0.75rem',
+              padding: '0.85rem 1rem',
+              border: '1px solid #E5E7EB',
+              marginBottom: '1rem',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#374151', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <span>🏘️</span>
+                <span>Filter by Village Hamlet:</span>
+              </div>
+              {selectedVillage !== 'ALL' && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedVillage('ALL')}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#059669',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                  }}
+                >
+                  Reset to All ({orders.length} orders)
+                </button>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => setSelectedVillage('ALL')}
+                style={{
+                  padding: '0.35rem 0.85rem',
+                  borderRadius: '9999px',
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  minHeight: '36px',
+                  border: selectedVillage === 'ALL' ? '1.5px solid #059669' : '1px solid #D1D5DB',
+                  backgroundColor: selectedVillage === 'ALL' ? '#059669' : '#F9FAFB',
+                  color: selectedVillage === 'ALL' ? '#FFFFFF' : '#374151',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                All Villages ({orders.length})
+              </button>
+              {villages.map((v) => {
+                const count = orders.filter((o) => (o.village || o.area) === v).length;
+                const isSelected = selectedVillage === v;
+                return (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setSelectedVillage(v)}
+                    style={{
+                      padding: '0.35rem 0.85rem',
+                      borderRadius: '9999px',
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      minHeight: '36px',
+                      border: isSelected ? '1.5px solid #059669' : '1px solid #D1D5DB',
+                      backgroundColor: isSelected ? '#059669' : '#F9FAFB',
+                      color: isSelected ? '#FFFFFF' : '#374151',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    {v} ({count})
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <ManifestList
-            orders={orders}
+            orders={villageFilteredOrders}
             loading={loading}
-            pageSize={50}
+            pageSize={30}
             onDispatchOrder={handleDispatchSingleOrder}
             onDispatchAll={handleDispatchBatch}
             dispatching={dispatching}

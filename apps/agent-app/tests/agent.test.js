@@ -279,6 +279,61 @@ describe('Agent App & Rural Batch Logistics Tests', () => {
       expect(sim50.dailyAgentEarnings + sim50.dailyQuikoooShare).toBe(sim50.dailyPool);
       expect(sim50.monthlyAgentEarnings + sim50.monthlyQuikoooShare).toBe(sim50.monthlyPool);
     });
+
+    it('agent command palette action list is non-empty and includes franchise routes', async () => {
+      const { DEFAULT_COMMANDS } = await import('../src/components/CommandPalette.jsx');
+      expect(Array.isArray(DEFAULT_COMMANDS)).toBe(true);
+      expect(DEFAULT_COMMANDS.length).toBeGreaterThan(0);
+
+      const paths = DEFAULT_COMMANDS.map((c) => c.path).filter(Boolean);
+      expect(paths).toContain('/agent');
+      expect(paths).toContain('/agent/vendors');
+      expect(paths).toContain('/agent/drivers');
+      expect(paths).toContain('/agent/batch');
+      expect(paths).toContain('/agent/earnings');
+
+      DEFAULT_COMMANDS.forEach((cmd) => {
+        expect(cmd.id).toBeDefined();
+        expect(cmd.label).toBeDefined();
+        expect(cmd.keywords.length).toBeGreaterThan(0);
+      });
+    });
+
+    it('paginate helper correctly slices list collections with first 30 items per page', async () => {
+      const { paginateHelper, paginateList } = await import('../src/lib/paginate.js');
+      const testManifest = Array.from({ length: 70 }, (_, i) => ({ id: `ord-${i + 1}`, village: 'Gejjalagere' }));
+
+      // Page 1: 30 items
+      const page1 = paginateHelper(testManifest, 1, 30);
+      expect(page1).toHaveLength(30);
+      expect(page1[0].id).toBe('ord-1');
+      expect(page1[29].id).toBe('ord-30');
+
+      // Page 2: 30 items
+      const page2 = paginateHelper(testManifest, 2, 30);
+      expect(page2).toHaveLength(30);
+      expect(page2[0].id).toBe('ord-31');
+      expect(page2[29].id).toBe('ord-60');
+
+      // Page 3: 10 items
+      const page3 = paginateHelper(testManifest, 3, 30);
+      expect(page3).toHaveLength(10);
+      expect(page3[0].id).toBe('ord-61');
+      expect(page3[9].id).toBe('ord-70');
+
+      // Page 4: empty
+      expect(paginateHelper(testManifest, 4, 30)).toHaveLength(0);
+
+      // Edge cases
+      expect(paginateHelper([], 1, 30)).toEqual([]);
+      expect(paginateHelper(testManifest, 0, 30)).toHaveLength(30);
+
+      // paginateList returns first 30 items
+      const first30 = paginateList(testManifest, 30);
+      expect(first30).toHaveLength(30);
+      expect(first30[0].id).toBe('ord-1');
+    });
   });
 });
+
 

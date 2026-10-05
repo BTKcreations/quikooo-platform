@@ -17,11 +17,15 @@ import { useToast } from '../components/Toast.jsx';
 import { SkeletonCard } from '../components/Skeleton.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import PrefetchLink from '../components/PrefetchLink.jsx';
+import { useVirtualList } from '../lib/paginate.js';
 
 export default function TasksPage() {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isOnDuty, setIsOnDuty] = useState(true);
+
+  // 1-Tap Star Rating state for completed deliveries (local state)
+  const [ratings, setRatings] = useState({});
 
   // 4-digit OTP Handshake Modal state
   const [activeModal, setActiveModal] = useState(null); // { type: 'PICKUP' | 'DELIVERY', task }
@@ -35,6 +39,11 @@ export default function TasksPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const { showToast } = useToast();
+
+  const handleRateDelivery = (taskId, star) => {
+    setRatings((prev) => ({ ...prev, [taskId]: star }));
+    showToast(`⭐ Rated ${star}/5 stars! Driver feedback saved.`, 'success');
+  };
 
   useEffect(() => {
     async function loadTasks() {
@@ -477,179 +486,294 @@ export default function TasksPage() {
         )}
 
         {/* Big 48px+ Thumb Task Cards */}
-        <div className="grid-cards">
-          {tasks.map((task) => {
-            const isAssigned = task.status === 'ASSIGNED';
-            const isAccepted = task.status === 'ACCEPTED';
-            const isPickedUp = task.status === 'PICKED_UP';
-            const isDelivered = task.status === 'DELIVERED';
+        {(() => {
+          const {
+            displayedItems: visibleTasks,
+            visibleCount,
+            totalCount,
+            hasMore,
+            loadMore,
+            sentinelRef,
+          } = useVirtualList({ items: tasks, initialCount: 30, step: 15 });
 
-            return (
-              <div
-                key={task.id}
-                className="card"
-                style={{
-                  borderLeft: isDelivered
-                    ? '5px solid #9CA3AF'
-                    : isPickedUp
-                    ? '5px solid #059669'
-                    : isAccepted
-                    ? '5px solid #10B981'
-                    : '5px solid #F59E0B',
-                  padding: '1.25rem',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                  gap: '0.85rem',
-                }}
-              >
-                <div>
-                  {/* Header */}
-                  <div className="flex-row-between mb-2">
-                    <div>
-                      <span style={{ fontFamily: 'var(--font-family-display)', fontWeight: 800, fontSize: '1.1rem' }}>
-                        {task.orderNumber}
-                      </span>
-                      <div style={{ fontSize: '0.75rem', color: '#6B7280', marginTop: '2px' }}>
-                        {task.itemsCount || 1} package • Express 2.0 km geofence
-                      </div>
-                    </div>
+          return (
+            <>
+              <div className="grid-cards">
+                {visibleTasks.map((task) => {
+                  const isAssigned = task.status === 'ASSIGNED';
+                  const isAccepted = task.status === 'ACCEPTED';
+                  const isPickedUp = task.status === 'PICKED_UP';
+                  const isDelivered = task.status === 'DELIVERED';
 
-                    <div style={{ textAlign: 'right' }}>
-                      <span className="badge badge-success" style={{ fontSize: '0.85rem', padding: '0.3rem 0.6rem', fontWeight: 800 }}>
-                        +₹{task.payoutAmount.toFixed(2)}
-                      </span>
-                      <div style={{ fontSize: '0.7rem', color: '#059669', fontWeight: 800, marginTop: '2px' }}>
-                        100% Payout
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Step 1: Store Pickup Info */}
-                  <div
-                    style={{
-                      backgroundColor: isAccepted ? '#ECFDF5' : '#F9FAFB',
-                      borderRadius: '0.5rem',
-                      padding: '0.85rem',
-                      marginBottom: '0.65rem',
-                      border: isAccepted ? '1px solid #A7F3D0' : '1px solid #E5E7EB',
-                    }}
-                  >
-                    <div className="flex-row-between">
-                      <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#065F46', textTransform: 'uppercase' }}>
-                        🏪 1. Store Pickup
-                      </div>
-                      {isPickedUp && (
-                        <span style={{ fontSize: '0.72rem', color: '#059669', fontWeight: 800 }}>✓ PICKED UP</span>
-                      )}
-                    </div>
-                    <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#111827', marginTop: '3px' }}>
-                      {task.vendorName}
-                    </div>
-                    <div style={{ fontSize: '0.8rem', color: '#4B5563', marginTop: '2px' }}>
-                      {task.vendorAddress}
-                    </div>
-                  </div>
-
-                  {/* Step 2: Customer Delivery Destination Info */}
-                  <div
-                    style={{
-                      backgroundColor: isPickedUp ? '#ECFDF5' : '#F9FAFB',
-                      borderRadius: '0.5rem',
-                      padding: '0.85rem',
-                      marginBottom: '0.85rem',
-                      border: isPickedUp ? '1px solid #A7F3D0' : '1px solid #E5E7EB',
-                    }}
-                  >
-                    <div className="flex-row-between">
-                      <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#065F46', textTransform: 'uppercase' }}>
-                        📍 2. Customer Delivery Destination
-                      </div>
-                      {isDelivered && (
-                        <span style={{ fontSize: '0.72rem', color: '#059669', fontWeight: 800 }}>✓ DELIVERED</span>
-                      )}
-                    </div>
-                    <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#111827', marginTop: '3px' }}>
-                      {task.customerName} ({task.customerPhone})
-                    </div>
-                    <div style={{ fontSize: '0.8rem', color: '#4B5563', marginTop: '2px' }}>
-                      {task.customerAddress}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Big 48px+ Thumb One-Tap Action Buttons */}
-                <div>
-                  {isAssigned && (
-                    <button
-                      onClick={() => handleAccept(task)}
-                      className="btn-primary btn-block"
-                      style={{
-                        minHeight: '48px',
-                        fontSize: '1rem',
-                        fontWeight: 800,
-                        backgroundColor: '#059669',
-                      }}
-                      aria-label={`Accept delivery run ${task.orderNumber}`}
-                    >
-                      ⚡ One-Tap Accept Run (₹25.00)
-                    </button>
-                  )}
-
-                  {isAccepted && (
-                    <button
-                      onClick={() => openOtpModal('PICKUP', task)}
-                      className="btn-primary btn-block"
-                      style={{
-                        minHeight: '48px',
-                        fontSize: '1rem',
-                        fontWeight: 800,
-                        backgroundColor: '#047857',
-                      }}
-                      aria-label={`Enter pickup OTP for ${task.orderNumber}`}
-                    >
-                      📦 At Store: Enter Pickup OTP
-                    </button>
-                  )}
-
-                  {isPickedUp && (
-                    <button
-                      onClick={() => openOtpModal('DELIVERY', task)}
-                      className="btn-primary btn-block"
-                      style={{
-                        minHeight: '48px',
-                        fontSize: '1rem',
-                        fontWeight: 800,
-                        backgroundColor: '#065F46',
-                      }}
-                      aria-label={`Enter customer OTP for ${task.orderNumber}`}
-                    >
-                      ✅ At Doorstep: Enter Customer OTP & Complete
-                    </button>
-                  )}
-
-                  {isDelivered && (
+                  return (
                     <div
+                      key={task.id}
+                      className="card"
                       style={{
-                        minHeight: '48px',
+                        borderLeft: isDelivered
+                          ? '5px solid #9CA3AF'
+                          : isPickedUp
+                          ? '5px solid #059669'
+                          : isAccepted
+                          ? '5px solid #10B981'
+                          : '5px solid #F59E0B',
+                        padding: '1.25rem',
                         display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: '#ECFDF5',
-                        borderRadius: '0.5rem',
-                        color: '#059669',
-                        fontWeight: 800,
-                        fontSize: '0.925rem',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        gap: '0.85rem',
                       }}
                     >
-                      🎉 Delivery Complete • ₹25.00 Credited
+                      <div>
+                        {/* Header */}
+                        <div className="flex-row-between mb-2">
+                          <div>
+                            <span style={{ fontFamily: 'var(--font-family-display)', fontWeight: 800, fontSize: '1.1rem' }}>
+                              {task.orderNumber}
+                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '3px' }}>
+                              <span
+                                style={{
+                                  fontSize: '0.72rem',
+                                  fontWeight: 800,
+                                  padding: '0.15rem 0.5rem',
+                                  borderRadius: '9999px',
+                                  backgroundColor: isDelivered ? '#D1FAE5' : isPickedUp ? '#FEF3C7' : isAccepted ? '#E0E7FF' : '#FEF3C7',
+                                  color: isDelivered ? '#065F46' : isPickedUp ? '#92400E' : isAccepted ? '#3730A3' : '#92400E',
+                                  border: `1px solid ${isDelivered ? '#A7F3D0' : isPickedUp ? '#FDE68A' : isAccepted ? '#C7D2FE' : '#FDE68A'}`,
+                                }}
+                              >
+                                {isDelivered ? '✓ DELIVERED' : isPickedUp ? '📦 IN TRANSIT' : isAccepted ? '🛵 ACCEPTED' : '🔔 DISPATCHED'}
+                              </span>
+                              <span style={{ fontSize: '0.75rem', color: '#6B7280' }}>
+                                {task.itemsCount || 1} package • Express 2.0 km
+                              </span>
+                            </div>
+                          </div>
+
+                          <div style={{ textAlign: 'right' }}>
+                            <span className="badge badge-success" style={{ fontSize: '0.85rem', padding: '0.3rem 0.6rem', fontWeight: 800 }}>
+                              +₹{task.payoutAmount.toFixed(2)}
+                            </span>
+                            <div style={{ fontSize: '0.7rem', color: '#059669', fontWeight: 800, marginTop: '2px' }}>
+                              100% Payout
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Step 1: Store Pickup Info */}
+                        <div
+                          style={{
+                            backgroundColor: isAccepted ? '#ECFDF5' : '#F9FAFB',
+                            borderRadius: '0.5rem',
+                            padding: '0.85rem',
+                            marginBottom: '0.65rem',
+                            border: isAccepted ? '1px solid #A7F3D0' : '1px solid #E5E7EB',
+                          }}
+                        >
+                          <div className="flex-row-between">
+                            <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#065F46', textTransform: 'uppercase' }}>
+                              🏪 1. Store Pickup
+                            </div>
+                            {isPickedUp && (
+                              <span style={{ fontSize: '0.72rem', color: '#059669', fontWeight: 800 }}>✓ PICKED UP</span>
+                            )}
+                          </div>
+                          <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#111827', marginTop: '3px' }}>
+                            {task.vendorName}
+                          </div>
+                          <div style={{ fontSize: '0.8rem', color: '#4B5563', marginTop: '2px' }}>
+                            {task.vendorAddress}
+                          </div>
+                        </div>
+
+                        {/* Step 2: Customer Delivery Destination Info */}
+                        <div
+                          style={{
+                            backgroundColor: isPickedUp ? '#ECFDF5' : '#F9FAFB',
+                            borderRadius: '0.5rem',
+                            padding: '0.85rem',
+                            marginBottom: '0.85rem',
+                            border: isPickedUp ? '1px solid #A7F3D0' : '1px solid #E5E7EB',
+                          }}
+                        >
+                          <div className="flex-row-between">
+                            <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#065F46', textTransform: 'uppercase' }}>
+                              📍 2. Customer Delivery Destination
+                            </div>
+                            {isDelivered && (
+                              <span style={{ fontSize: '0.72rem', color: '#059669', fontWeight: 800 }}>✓ DELIVERED</span>
+                            )}
+                          </div>
+                          <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#111827', marginTop: '3px' }}>
+                            {task.customerName} ({task.customerPhone})
+                          </div>
+                          <div style={{ fontSize: '0.8rem', color: '#4B5563', marginTop: '2px' }}>
+                            {task.customerAddress}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Big 48px+ Thumb One-Tap Action Buttons */}
+                      <div>
+                        {isAssigned && (
+                          <button
+                            onClick={() => handleAccept(task)}
+                            className="btn-primary btn-block"
+                            style={{
+                              minHeight: '48px',
+                              fontSize: '1rem',
+                              fontWeight: 800,
+                              backgroundColor: '#059669',
+                            }}
+                            aria-label={`Accept delivery run ${task.orderNumber}`}
+                          >
+                            ⚡ One-Tap Accept Run (₹25.00)
+                          </button>
+                        )}
+
+                        {isAccepted && (
+                          <button
+                            onClick={() => openOtpModal('PICKUP', task)}
+                            className="btn-primary btn-block"
+                            style={{
+                              minHeight: '48px',
+                              fontSize: '1rem',
+                              fontWeight: 800,
+                              backgroundColor: '#047857',
+                            }}
+                            aria-label={`Enter pickup OTP for ${task.orderNumber}`}
+                          >
+                            📦 At Store: Enter Pickup OTP
+                          </button>
+                        )}
+
+                        {isPickedUp && (
+                          <button
+                            onClick={() => openOtpModal('DELIVERY', task)}
+                            className="btn-primary btn-block"
+                            style={{
+                              minHeight: '48px',
+                              fontSize: '1rem',
+                              fontWeight: 800,
+                              backgroundColor: '#065F46',
+                            }}
+                            aria-label={`Enter customer OTP for ${task.orderNumber}`}
+                          >
+                            ✅ At Doorstep: Enter Customer OTP & Complete
+                          </button>
+                        )}
+
+                        {isDelivered && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                            <div
+                              style={{
+                                minHeight: '44px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                backgroundColor: '#ECFDF5',
+                                borderRadius: '0.5rem',
+                                color: '#059669',
+                                fontWeight: 800,
+                                fontSize: '0.925rem',
+                                border: '1px solid #A7F3D0',
+                              }}
+                            >
+                              🎉 Delivery Complete • ₹25.00 Credited
+                            </div>
+
+                            {/* 1-Tap Star Rating Prompt after delivered (local state) */}
+                            {ratings[task.id] ? (
+                              <div
+                                style={{
+                                  backgroundColor: '#F0FDF4',
+                                  borderRadius: '0.5rem',
+                                  padding: '0.5rem',
+                                  textAlign: 'center',
+                                  fontSize: '0.825rem',
+                                  fontWeight: 700,
+                                  color: '#065F46',
+                                  border: '1px solid #BBF7D0',
+                                }}
+                              >
+                                ⭐ Experience Rated: {'★'.repeat(ratings[task.id])}{'☆'.repeat(5 - ratings[task.id])} ({ratings[task.id]}/5) • Feedback Saved
+                              </div>
+                            ) : (
+                              <div
+                                style={{
+                                  backgroundColor: '#F9FAFB',
+                                  borderRadius: '0.5rem',
+                                  padding: '0.65rem',
+                                  border: '1px dashed #059669',
+                                  textAlign: 'center',
+                                }}
+                              >
+                                <div style={{ fontSize: '0.78rem', color: '#374151', fontWeight: 700, marginBottom: '0.4rem' }}>
+                                  ⭐ 1-Tap Experience Rating:
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'center', gap: '0.4rem' }}>
+                                  {[1, 2, 3, 4, 5].map((star) => (
+                                    <button
+                                      key={star}
+                                      type="button"
+                                      onClick={() => handleRateDelivery(task.id, star)}
+                                      style={{
+                                        minWidth: '44px',
+                                        minHeight: '44px',
+                                        borderRadius: '0.5rem',
+                                        border: '1px solid #D1D5DB',
+                                        backgroundColor: '#FFFFFF',
+                                        fontSize: '1.25rem',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                      }}
+                                      aria-label={`Rate ${star} star`}
+                                      title={`Rate ${star} stars`}
+                                    >
+                                      ⭐
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  )}
-                </div>
+                  );
+                })}
               </div>
-            );
-          })}
-        </div>
+
+              {/* Virtualization: Load More Tasks CTA */}
+              {hasMore && (
+                <div style={{ textAlign: 'center', marginTop: '1.5rem', marginBottom: '1.5rem' }}>
+                  <button
+                    onClick={loadMore}
+                    className="btn-secondary"
+                    style={{
+                      padding: '0.65rem 1.75rem',
+                      fontWeight: 700,
+                      fontSize: '0.875rem',
+                      minHeight: '48px',
+                      backgroundColor: '#FFFFFF',
+                      border: '1px solid #D1D5DB',
+                      borderRadius: '0.5rem',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Load More Tasks ({totalCount - visibleCount} remaining)
+                  </button>
+                  <div ref={sentinelRef} style={{ height: '1px' }} />
+                </div>
+              )}
+            </>
+          );
+        })()}
 
         {/* Mobile Thumb-Zone Sticky Accept CTA */}
         {firstAssignedTask && (

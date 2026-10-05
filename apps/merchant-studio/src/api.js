@@ -129,11 +129,11 @@ export function buildPrepTimePayload(orderId, prepMinutes = 15) {
  * Stock item toggle helper for merchant menu manager
  */
 export const INITIAL_MENU_ITEMS = [
-  { id: 'item-1', name: 'Special Chicken Biryani Feast', price: 100, customerPrice: 105, inStock: true, category: 'Main Course' },
-  { id: 'item-2', name: 'Paneer Butter Masala', price: 100, customerPrice: 105, inStock: true, category: 'Main Course' },
-  { id: 'item-3', name: 'Garlic Butter Naan', price: 40, customerPrice: 42, inStock: true, category: 'Breads' },
-  { id: 'item-4', name: 'Dal Makhani', price: 80, customerPrice: 84, inStock: true, category: 'Main Course' },
-  { id: 'item-5', name: 'Gulab Jamun (2 Pcs)', price: 60, customerPrice: 63, inStock: false, category: 'Desserts' },
+  { id: 'item-1', name: 'Special Chicken Biryani Feast', price: 100, customerPrice: 105, inStock: true, stockQuantity: 18, lowStock: false, category: 'Main Course' },
+  { id: 'item-2', name: 'Paneer Butter Masala', price: 100, customerPrice: 105, inStock: true, stockQuantity: 3, lowStock: true, category: 'Main Course' },
+  { id: 'item-3', name: 'Garlic Butter Naan', price: 40, customerPrice: 42, inStock: true, stockQuantity: 25, lowStock: false, category: 'Breads' },
+  { id: 'item-4', name: 'Dal Makhani', price: 80, customerPrice: 84, inStock: true, stockQuantity: 2, lowStock: true, category: 'Main Course' },
+  { id: 'item-5', name: 'Gulab Jamun (2 Pcs)', price: 60, customerPrice: 63, inStock: false, stockQuantity: 0, lowStock: false, category: 'Desserts' },
 ];
 
 export function toggleItemStock(items, itemId) {

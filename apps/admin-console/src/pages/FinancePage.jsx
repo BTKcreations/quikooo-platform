@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   fetchLedgerEntries,
   calculateOrderLedger,
@@ -7,13 +8,14 @@ import {
   processSettlement,
 } from '../api';
 import KpiCard from '../components/KpiCard.jsx';
-import DataTable from '../components/DataTable.jsx';
+import DataTable, { parseSortParam, formatSortParam } from '../components/DataTable.jsx';
 import OfflineBanner from '../components/OfflineBanner.jsx';
 import { Skeleton, SkeletonCard } from '../components/Skeleton.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import { useToast } from '../components/Toast.jsx';
 
 export default function FinancePage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [simulatedPrice, setSimulatedPrice] = useState(100);
@@ -23,6 +25,31 @@ export default function FinancePage() {
   const [processingId, setProcessingId] = useState(null);
 
   const { showToast } = useToast();
+
+  const filterQuery = searchParams.get('q') || '';
+  const sortParam = searchParams.get('sort') || '';
+  const sortConfig = useMemo(() => parseSortParam(sortParam), [sortParam]);
+
+  const handleFilterChange = (val) => {
+    const next = new URLSearchParams(searchParams);
+    if (val) {
+      next.set('q', val);
+    } else {
+      next.delete('q');
+    }
+    setSearchParams(next, { replace: true });
+  };
+
+  const handleSortChange = (newSort) => {
+    const next = new URLSearchParams(searchParams);
+    const formatted = formatSortParam(newSort);
+    if (formatted) {
+      next.set('sort', formatted);
+    } else {
+      next.delete('sort');
+    }
+    setSearchParams(next, { replace: true });
+  };
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -392,6 +419,10 @@ export default function FinancePage() {
           stickyHeader={true}
           searchPlaceholder="Filter accounts, debit, credit, or notes..."
           loading={loading}
+          filterText={filterQuery}
+          onFilterChange={handleFilterChange}
+          sortConfig={sortConfig}
+          onSortChange={handleSortChange}
           footer={
             <tr style={{ backgroundColor: '#F9FAFB', fontWeight: 700 }}>
               <td colSpan="2">TOTAL DOUBLE-ENTRY RECONCILIATION</td>

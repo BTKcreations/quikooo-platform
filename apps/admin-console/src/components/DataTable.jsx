@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import EmptyState from './EmptyState.jsx';
 import { Skeleton } from './Skeleton.jsx';
 
@@ -40,6 +40,38 @@ export function paginateTable(items = [], page = 1, pageSize = 20) {
   };
 }
 
+/**
+ * Parses URL query sort parameter (?sort=account:desc or -account or account)
+ */
+export function parseSortParam(param) {
+  if (!param || typeof param !== 'string') {
+    return { key: null, direction: 'asc' };
+  }
+  const clean = param.trim();
+  if (!clean) return { key: null, direction: 'asc' };
+
+  if (clean.startsWith('-')) {
+    return { key: clean.slice(1), direction: 'desc' };
+  }
+  if (clean.includes(':')) {
+    const [key, dir] = clean.split(':');
+    return { key, direction: dir?.toLowerCase() === 'desc' ? 'desc' : 'asc' };
+  }
+  if (clean.includes(',')) {
+    const [key, dir] = clean.split(',');
+    return { key, direction: dir?.toLowerCase() === 'desc' ? 'desc' : 'asc' };
+  }
+  return { key: clean, direction: 'asc' };
+}
+
+/**
+ * Formats sort config into URL query sort parameter value (e.g. account:desc or account:asc)
+ */
+export function formatSortParam(sortConfig) {
+  if (!sortConfig || !sortConfig.key) return '';
+  return sortConfig.direction === 'desc' ? `${sortConfig.key}:desc` : `${sortConfig.key}:asc`;
+}
+
 export default function DataTable({
   columns = [],
   data = [],
@@ -57,28 +89,59 @@ export default function DataTable({
   rowKey = (row, index) => row.id || row.code || index,
   className = '',
   maxHeight = '650px',
+  filterText: controlledFilterText,
+  onFilterChange: onControlledFilterChange,
+  sortConfig: controlledSortConfig,
+  onSortChange: onControlledSortChange,
+  initialFilterText = '',
+  initialSortConfig = { key: null, direction: 'asc' },
 }) {
-  const [filterText, setFilterText] = useState('');
+  const [internalFilterText, setInternalFilterText] = useState(initialFilterText);
   const [currentPage, setCurrentPage] = useState(1);
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+  const [internalSortConfig, setInternalSortConfig] = useState(initialSortConfig);
+
+  const filterText = controlledFilterText !== undefined ? controlledFilterText : internalFilterText;
+  const sortConfig = controlledSortConfig !== undefined ? controlledSortConfig : internalSortConfig;
 
   // Reset to page 1 whenever filter changes
-  const handleFilterChange = (e) => {
-    setFilterText(e.target.value);
+  useEffect(() => {
     setCurrentPage(1);
+  }, [filterText]);
+
+  const handleFilterChange = (e) => {
+    const val = e.target.value;
+    if (onControlledFilterChange) {
+      onControlledFilterChange(val);
+    } else {
+      setInternalFilterText(val);
+    }
+  };
+
+  const handleClearFilter = () => {
+    if (onControlledFilterChange) {
+      onControlledFilterChange('');
+    } else {
+      setInternalFilterText('');
+    }
   };
 
   // Sort handler
   const handleSort = (columnKey) => {
-    setSortConfig((prev) => {
-      if (prev.key === columnKey) {
-        return {
-          key: columnKey,
-          direction: prev.direction === 'asc' ? 'desc' : 'asc',
-        };
-      }
-      return { key: columnKey, direction: 'asc' };
-    });
+    let nextSort;
+    if (sortConfig.key === columnKey) {
+      nextSort = {
+        key: columnKey,
+        direction: sortConfig.direction === 'asc' ? 'desc' : 'asc',
+      };
+    } else {
+      nextSort = { key: columnKey, direction: 'asc' };
+    }
+
+    if (onControlledSortChange) {
+      onControlledSortChange(nextSort);
+    } else {
+      setInternalSortConfig(nextSort);
+    }
   };
 
   // Filtered dataset
@@ -200,10 +263,7 @@ export default function DataTable({
             {filterText && (
               <button
                 type="button"
-                onClick={() => {
-                  setFilterText('');
-                  setCurrentPage(1);
-                }}
+                onClick={handleClearFilter}
                 style={{
                   position: 'absolute',
                   right: '0.5rem',
@@ -314,7 +374,7 @@ export default function DataTable({
                     title={emptyTitle}
                     description={filterText ? `No records matching "${filterText}".` : emptyMessage}
                     actionText={filterText ? 'Clear filter' : undefined}
-                    onAction={filterText ? () => setFilterText('') : undefined}
+                    onAction={filterText ? handleClearFilter : undefined}
                   />
                 </td>
               </tr>

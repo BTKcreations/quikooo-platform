@@ -1,14 +1,41 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { fetchAuditLogs, validateAuditEntry } from '../api';
 import KpiCard from '../components/KpiCard.jsx';
-import DataTable from '../components/DataTable.jsx';
+import DataTable, { parseSortParam, formatSortParam } from '../components/DataTable.jsx';
 import OfflineBanner from '../components/OfflineBanner.jsx';
 import { SkeletonCard } from '../components/Skeleton.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 
 export default function AuditPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const filterQuery = searchParams.get('q') || '';
+  const sortParam = searchParams.get('sort') || '';
+  const sortConfig = useMemo(() => parseSortParam(sortParam), [sortParam]);
+
+  const handleFilterChange = (val) => {
+    const next = new URLSearchParams(searchParams);
+    if (val) {
+      next.set('q', val);
+    } else {
+      next.delete('q');
+    }
+    setSearchParams(next, { replace: true });
+  };
+
+  const handleSortChange = (newSort) => {
+    const next = new URLSearchParams(searchParams);
+    const formatted = formatSortParam(newSort);
+    if (formatted) {
+      next.set('sort', formatted);
+    } else {
+      next.delete('sort');
+    }
+    setSearchParams(next, { replace: true });
+  };
 
   useEffect(() => {
     fetchAuditLogs().then((data) => {
@@ -177,6 +204,10 @@ export default function AuditPage() {
           loading={loading}
           emptyMessage="No audit logs recorded."
           emptyIcon="📜"
+          filterText={filterQuery}
+          onFilterChange={handleFilterChange}
+          sortConfig={sortConfig}
+          onSortChange={handleSortChange}
         />
       </div>
     </div>

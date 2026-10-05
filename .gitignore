@@ -16,3 +16,5 @@ build/
 *.bak
 .idea/
 .vscode/
+/uploads/
+/backend/uploads/

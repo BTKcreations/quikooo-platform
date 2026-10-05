@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import PrefetchLink from './components/PrefetchLink.jsx';
 import { ToastProvider } from './components/Toast.jsx';
 import { SkeletonPage } from './components/Skeleton.jsx';
+import CommandPalette from './components/CommandPalette.jsx';
 
 // Dynamic Page Lazy Loading for Performance
 const Overview = lazy(() => import('./pages/Overview.jsx'));
@@ -76,6 +77,7 @@ export default function App() {
   return (
     <ToastProvider>
       <div className="app-viewport">
+        <CommandPalette />
         <div className="admin-shell">
           {/* Sticky Header with Brand and Live Status */}
           <header className="top-nav">
@@ -85,6 +87,27 @@ export default function App() {
             </Link>
 
             <div className="admin-header-actions">
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent('quikooo:open-command-palette'))}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.18)',
+                  border: '1px solid rgba(255, 255, 255, 0.3)',
+                  color: '#FFFFFF',
+                  borderRadius: '9999px',
+                  padding: '0.25rem 0.65rem',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                }}
+                aria-label="Open command palette (Ctrl+K)"
+              >
+                <span>🔍</span>
+                <span>Ctrl+K</span>
+              </button>
               <span className="live-badge">
                 <span className="live-indicator-dot" />
                 <span>Nominal (Port 3004)</span>
@@ -119,6 +142,29 @@ export default function App() {
                   Platform Navigation
                 </div>
               </div>
+
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent('quikooo:open-command-palette'))}
+                style={{
+                  margin: '0.25rem 0.5rem 0.75rem 0.5rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '0.45rem 0.75rem',
+                  background: '#F3F4F6',
+                  border: '1px solid #E5E7EB',
+                  borderRadius: '0.5rem',
+                  color: '#4B5563',
+                  fontSize: '0.8rem',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                }}
+                aria-label="Open command palette"
+              >
+                <span>🔍 Search routes...</span>
+                <kbd style={{ fontSize: '0.7rem', background: '#E5E7EB', padding: '0.1rem 0.35rem', borderRadius: '4px' }}>Ctrl+K</kbd>
+              </button>
 
               {navItems.map((item) => (
                 <PrefetchLink

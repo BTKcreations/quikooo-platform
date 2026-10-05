@@ -18,6 +18,7 @@ import AudioAlert, {
   playOrderBeep,
 } from '../components/AudioAlert.jsx';
 import PrepTimer from '../components/PrepTimer.jsx';
+import { useVirtualList } from '../lib/paginate.js';
 
 export default function OrdersBoard() {
   const [orders, setOrders] = useState([]);
@@ -34,6 +35,14 @@ export default function OrdersBoard() {
   // Prep-time selector modal state
   const [prepModalOrder, setPrepModalOrder] = useState(null);
   const [selectedPrepTime, setSelectedPrepTime] = useState(15);
+  const [lastPrepTime, setLastPrepTime] = useState(() => {
+    try {
+      const saved = localStorage.getItem('quikooo_merchant_last_prep_time');
+      return saved ? Number(saved) : 15;
+    } catch {
+      return 15;
+    }
+  });
 
   // Stock toggle state
   const [menuItems, setMenuItems] = useState(INITIAL_MENU_ITEMS);
@@ -67,12 +76,17 @@ export default function OrdersBoard() {
   // Open prep-time selector modal
   const openPrepModal = (order) => {
     setPrepModalOrder(order);
-    setSelectedPrepTime(order.prepMinutes || 15);
+    setSelectedPrepTime(order.prepMinutes || lastPrepTime || 15);
   };
 
-  // One-tap Accept directly with default/selected prep time
-  const handleOneTapAccept = async (order, prepMins = 15) => {
-    const prepPayload = buildPrepTimePayload(order.id, prepMins);
+  // One-tap Accept directly with default/selected prep time & update last prep-time
+  const handleOneTapAccept = async (order, prepMins) => {
+    const chosenMins = prepMins || lastPrepTime || 15;
+    setLastPrepTime(chosenMins);
+    try {
+      localStorage.setItem('quikooo_merchant_last_prep_time', String(chosenMins));
+    } catch {}
+    const prepPayload = buildPrepTimePayload(order.id, chosenMins);
     await executeTransition(
       order,
       'VENDOR_ACCEPTED',
@@ -85,7 +99,7 @@ export default function OrdersBoard() {
   // ORDER_PLACED -> VENDOR_ACCEPTED -> PREPARING -> READY_FOR_PICKUP
   const handleAdvanceOrder = async (order) => {
     if (order.status === 'ORDER_PLACED') {
-      await handleOneTapAccept(order, order.prepMinutes || 15);
+      await handleOneTapAccept(order, lastPrepTime);
       return;
     }
 
@@ -100,6 +114,10 @@ export default function OrdersBoard() {
     const order = prepModalOrder;
     const prepMins = selectedPrepTime || 15;
     setPrepModalOrder(null);
+    setLastPrepTime(prepMins);
+    try {
+      localStorage.setItem('quikooo_merchant_last_prep_time', String(prepMins));
+    } catch {}
     await handleOneTapAccept(order, prepMins);
   };
 
@@ -187,13 +205,35 @@ export default function OrdersBoard() {
   const getStatusBadge = (status) => {
     switch (status) {
       case 'ORDER_PLACED':
-        return <span className="badge badge-placed">🔔 Placed</span>;
+        return (
+          <span className="badge badge-placed" style={{ fontWeight: 700 }}>
+            🔔 Placed (Ready to Prep)
+          </span>
+        );
       case 'VENDOR_ACCEPTED':
-        return <span className="badge badge-accepted">⏳ Accepted</span>;
+        return (
+          <span className="badge badge-accepted" style={{ fontWeight: 700 }}>
+            ⏳ Accepted (In Queue)
+          </span>
+        );
       case 'PREPARING':
-        return <span className="badge badge-preparing">🍳 Cooking</span>;
+        return (
+          <span className="badge badge-preparing" style={{ fontWeight: 700 }}>
+            🍳 Cooking Now
+          </span>
+        );
       case 'READY_FOR_PICKUP':
-        return <span className="badge badge-ready">🛵 Ready</span>;
+        return (
+          <span className="badge badge-ready" style={{ fontWeight: 700 }}>
+            🛵 Ready for Rider
+          </span>
+        );
+      case 'DELIVERED':
+        return (
+          <span className="badge badge-success" style={{ fontWeight: 700, backgroundColor: '#D1FAE5', color: '#065F46' }}>
+            ✓ Delivered
+          </span>
+        );
       default:
         return <span className="badge badge-muted">{status}</span>;
     }
@@ -381,19 +421,21 @@ export default function OrdersBoard() {
 
         {/* One-Tap Progression Buttons */}
         {order.status === 'ORDER_PLACED' && (
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
             <button
-              onClick={() => handleOneTapAccept(order, 15)}
+              onClick={() => handleOneTapAccept(order, lastPrepTime)}
               disabled={isProcessing}
-              className="btn-primary btn-block"
+              className="btn-primary"
               style={{
-                fontSize: '0.875rem',
-                padding: '0.6rem',
+                fontSize: '0.85rem',
+                padding: '0.6rem 0.75rem',
                 minHeight: '44px',
-                flex: 2,
+                flex: '2 1 180px',
+                backgroundColor: '#059669',
               }}
+              title={`Accept immediately with last prep time (${lastPrepTime}m)`}
             >
-              {isProcessing ? 'Accepting...' : '⚡ One-Tap Accept (15m)'}
+              {isProcessing ? 'Accepting...' : `⚡ Repeat Last Prep (${lastPrepTime}m)`}
             </button>
             <button
               onClick={() => openPrepModal(order)}
@@ -403,7 +445,7 @@ export default function OrdersBoard() {
                 fontSize: '0.8rem',
                 padding: '0.6rem',
                 minHeight: '44px',
-                flex: 1,
+                flex: '1 1 80px',
               }}
               title="Set custom preparation time"
             >
@@ -462,6 +504,19 @@ export default function OrdersBoard() {
       </div>
     );
   };
+
+  const filteredOrders = activeTab === 'ALL'
+    ? orders
+    : orders.filter((o) => matchesFilter(o, activeTab));
+
+  const {
+    displayedItems,
+    visibleCount,
+    totalCount,
+    hasMore,
+    loadMore,
+    sentinelRef,
+  } = useVirtualList({ items: filteredOrders, initialCount: 30, step: 15 });
 
   return (
     <div className="page-content">
@@ -662,7 +717,7 @@ export default function OrdersBoard() {
                 gap: '0.75rem',
               }}
             >
-              {orders.filter((o) => o.status === 'ORDER_PLACED').length === 0 ? (
+              {displayedItems.filter((o) => o.status === 'ORDER_PLACED').length === 0 ? (
                 <EmptyState
                   icon="🔔"
                   title="No New Placed Orders"
@@ -671,7 +726,7 @@ export default function OrdersBoard() {
                   onAction={simulateNewOrder}
                 />
               ) : (
-                orders
+                displayedItems
                   .filter((o) => o.status === 'ORDER_PLACED')
                   .map(renderOrderCard)
               )}
@@ -698,7 +753,7 @@ export default function OrdersBoard() {
                 gap: '0.75rem',
               }}
             >
-              {orders.filter(
+              {displayedItems.filter(
                 (o) =>
                   o.status === 'VENDOR_ACCEPTED' || o.status === 'PREPARING'
               ).length === 0 ? (
@@ -708,7 +763,7 @@ export default function OrdersBoard() {
                   description="Accept incoming orders to move them to kitchen preparation."
                 />
               ) : (
-                orders
+                displayedItems
                   .filter(
                     (o) =>
                       o.status === 'VENDOR_ACCEPTED' || o.status === 'PREPARING'
@@ -735,14 +790,14 @@ export default function OrdersBoard() {
                 gap: '0.75rem',
               }}
             >
-              {orders.filter((o) => o.status === 'READY_FOR_PICKUP').length === 0 ? (
+              {displayedItems.filter((o) => o.status === 'READY_FOR_PICKUP').length === 0 ? (
                 <EmptyState
                   icon="🛵"
                   title="No Orders Awaiting Pickup"
                   description="Prepared orders ready for delivery rider pickup will appear here."
                 />
               ) : (
-                orders
+                displayedItems
                   .filter((o) => o.status === 'READY_FOR_PICKUP')
                   .map(renderOrderCard)
               )}
@@ -752,7 +807,7 @@ export default function OrdersBoard() {
       ) : (
         /* Filtered single column view for activeTab */
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-          {orders.filter((o) => matchesFilter(o, activeTab)).length === 0 ? (
+          {displayedItems.length === 0 ? (
             <EmptyState
               icon="👨‍🍳"
               title={`No orders in ${
@@ -763,10 +818,32 @@ export default function OrdersBoard() {
               onAction={simulateNewOrder}
             />
           ) : (
-            orders
-              .filter((o) => matchesFilter(o, activeTab))
-              .map(renderOrderCard)
+            displayedItems.map(renderOrderCard)
           )}
+        </div>
+      )}
+
+      {/* Virtualization: Load More Orders CTA */}
+      {hasMore && (
+        <div style={{ textAlign: 'center', marginTop: '1.5rem', marginBottom: '1.5rem' }}>
+          <button
+            onClick={loadMore}
+            className="btn-secondary"
+            style={{
+              padding: '0.65rem 1.75rem',
+              fontWeight: 700,
+              fontSize: '0.875rem',
+              minHeight: '44px',
+              backgroundColor: '#FFFFFF',
+              border: '1px solid #D1D5DB',
+              borderRadius: '0.5rem',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+              cursor: 'pointer',
+            }}
+          >
+            Load More Orders ({totalCount - visibleCount} remaining)
+          </button>
+          <div ref={sentinelRef} style={{ height: '1px' }} />
         </div>
       )}
 
@@ -954,12 +1031,32 @@ export default function OrdersBoard() {
                         fontWeight: 600,
                         fontSize: '0.9rem',
                         color: item.inStock ? '#111827' : '#9CA3AF',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        flexWrap: 'wrap',
                       }}
                     >
-                      {item.name}
+                      <span>{item.name}</span>
+                      {item.inStock && item.lowStock && (
+                        <span
+                          className="badge-low-stock"
+                          style={{
+                            backgroundColor: '#FEF3C7',
+                            color: '#92400E',
+                            fontSize: '0.7rem',
+                            fontWeight: 700,
+                            padding: '0.15rem 0.45rem',
+                            borderRadius: '4px',
+                            border: '1px solid #FDE68A',
+                          }}
+                        >
+                          ⚠️ LOW STOCK ({item.stockQuantity !== undefined ? `${item.stockQuantity} left` : '3 left'})
+                        </span>
+                      )}
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: '#6B7280' }}>
-                      {item.category} • Listed: ₹{item.price}
+                    <div style={{ fontSize: '0.75rem', color: '#6B7280', marginTop: '2px' }}>
+                      {item.category} • Listed: ₹{item.price} • Customer: ₹{item.customerPrice}
                     </div>
                   </div>
 

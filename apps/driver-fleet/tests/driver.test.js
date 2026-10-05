@@ -224,7 +224,60 @@ describe('Driver Fleet Tests', () => {
       // At >100%: clamped to 0
       expect(calculateRingOffset(125, radius)).toBeCloseTo(0, 3);
     });
+
+    it('driver command palette action list is non-empty and includes rider routes', async () => {
+      const { DEFAULT_COMMANDS } = await import('../src/components/CommandPalette.jsx');
+      expect(Array.isArray(DEFAULT_COMMANDS)).toBe(true);
+      expect(DEFAULT_COMMANDS.length).toBeGreaterThan(0);
+
+      const paths = DEFAULT_COMMANDS.map((c) => c.path).filter(Boolean);
+      expect(paths).toContain('/driver/tasks');
+      expect(paths).toContain('/driver/duty');
+      expect(paths).toContain('/driver/payout');
+
+      DEFAULT_COMMANDS.forEach((cmd) => {
+        expect(cmd.id).toBeDefined();
+        expect(cmd.label).toBeDefined();
+        expect(cmd.keywords.length).toBeGreaterThan(0);
+      });
+    });
+
+    it('paginate helper correctly slices list collections with first 30 items per page', async () => {
+      const { paginateHelper, paginateList } = await import('../src/lib/paginate.js');
+      const testTasks = Array.from({ length: 65 }, (_, i) => ({ id: `task-${i + 1}`, orderNumber: `QK-${i + 1}` }));
+
+      // Page 1: 30 items
+      const page1 = paginateHelper(testTasks, 1, 30);
+      expect(page1).toHaveLength(30);
+      expect(page1[0].id).toBe('task-1');
+      expect(page1[29].id).toBe('task-30');
+
+      // Page 2: 30 items
+      const page2 = paginateHelper(testTasks, 2, 30);
+      expect(page2).toHaveLength(30);
+      expect(page2[0].id).toBe('task-31');
+      expect(page2[29].id).toBe('task-60');
+
+      // Page 3: 5 remaining items
+      const page3 = paginateHelper(testTasks, 3, 30);
+      expect(page3).toHaveLength(5);
+      expect(page3[0].id).toBe('task-61');
+      expect(page3[4].id).toBe('task-65');
+
+      // Page 4: empty
+      expect(paginateHelper(testTasks, 4, 30)).toHaveLength(0);
+
+      // Edge cases
+      expect(paginateHelper([], 1, 30)).toEqual([]);
+      expect(paginateHelper(testTasks, 0, 30)).toHaveLength(30);
+
+      // paginateList returns first 30 items
+      const first30 = paginateList(testTasks, 30);
+      expect(first30).toHaveLength(30);
+      expect(first30[0].id).toBe('task-1');
+    });
   });
 });
+
 
 

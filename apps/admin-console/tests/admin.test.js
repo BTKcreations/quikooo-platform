@@ -263,5 +263,44 @@ describe('Admin Console Tests', () => {
       expect(calculateKpiSum([])).toBe(0);
       expect(calculateKpiSum([13.94, 27.88, 8.36])).toBe(50.18);
     });
+
+    it('command palette action list is non-empty and includes essential admin routes', async () => {
+      const { DEFAULT_COMMANDS } = await import('../src/components/CommandPalette.jsx');
+      expect(Array.isArray(DEFAULT_COMMANDS)).toBe(true);
+      expect(DEFAULT_COMMANDS.length).toBeGreaterThan(0);
+
+      // Verify essential routes exist
+      const paths = DEFAULT_COMMANDS.map((c) => c.path).filter(Boolean);
+      expect(paths).toContain('/admin');
+      expect(paths).toContain('/admin/overview');
+      expect(paths).toContain('/admin/zones');
+      expect(paths).toContain('/admin/finance');
+      expect(paths).toContain('/admin/settlements');
+      expect(paths).toContain('/admin/users');
+      expect(paths).toContain('/admin/audit');
+
+      // Verify each command has an id, label, and keywords
+      DEFAULT_COMMANDS.forEach((cmd) => {
+        expect(cmd.id).toBeDefined();
+        expect(cmd.label).toBeDefined();
+        expect(Array.isArray(cmd.keywords)).toBe(true);
+        expect(cmd.keywords.length).toBeGreaterThan(0);
+      });
+    });
+
+    it('URL query persistence sort parser correctly converts sort query strings', async () => {
+      const { parseSortParam, formatSortParam } = await import('../src/components/DataTable.jsx');
+      expect(parseSortParam('account:desc')).toEqual({ key: 'account', direction: 'desc' });
+      expect(parseSortParam('account:asc')).toEqual({ key: 'account', direction: 'asc' });
+      expect(parseSortParam('-account')).toEqual({ key: 'account', direction: 'desc' });
+      expect(parseSortParam('account')).toEqual({ key: 'account', direction: 'asc' });
+      expect(parseSortParam('')).toEqual({ key: null, direction: 'asc' });
+      expect(parseSortParam(null)).toEqual({ key: null, direction: 'asc' });
+
+      expect(formatSortParam({ key: 'debit', direction: 'desc' })).toBe('debit:desc');
+      expect(formatSortParam({ key: 'debit', direction: 'asc' })).toBe('debit:asc');
+      expect(formatSortParam(null)).toBe('');
+      expect(formatSortParam({ key: null })).toBe('');
+    });
   });
 });

@@ -10,7 +10,7 @@ import Skeleton from './Skeleton.jsx';
 export default function ManifestList({
   orders = [],
   loading = false,
-  pageSize = 50,
+  pageSize = 30,
   onDispatchOrder,
   onDispatchAll,
   dispatching = false,
@@ -441,7 +441,7 @@ export default function ManifestList({
               boxShadow: '0 2px 6px rgba(0, 0, 0, 0.06)',
             }}
           >
-            Load Next 50 Orders ({filteredOrders.length - visibleLimit} remaining)
+            Load Next {pageSize} Orders ({filteredOrders.length - visibleLimit} remaining)
           </button>
           <div style={{ fontSize: '0.75rem', color: '#6B7280', marginTop: '0.5rem' }}>
             Loaded {visibleLimit} of {filteredOrders.length} orders

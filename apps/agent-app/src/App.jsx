@@ -5,6 +5,7 @@ import ErrorBoundary from './components/ErrorBoundary.jsx';
 import Skeleton from './components/Skeleton.jsx';
 import OfflineBanner from './components/OfflineBanner.jsx';
 import ToastProvider from './components/Toast.jsx';
+import CommandPalette from './components/CommandPalette.jsx';
 import { isRuralOrderEligible } from './api.js';
 
 
@@ -62,6 +63,7 @@ export default function App() {
     <ErrorBoundary>
       <ToastProvider>
         <div className="app-viewport">
+          <CommandPalette />
           <OfflineBanner />
 
         <div className="agent-shell">
@@ -80,6 +82,28 @@ export default function App() {
                 <div style={{ fontSize: '0.72rem', color: '#6B7280', fontWeight: 600 }}>Zone Franchise</div>
               </div>
             </PrefetchLink>
+
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('quikooo:open-command-palette'))}
+              style={{
+                margin: '0.25rem 0.5rem 0.75rem 0.5rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '0.45rem 0.75rem',
+                background: '#F3F4F6',
+                border: '1px solid #E5E7EB',
+                borderRadius: '0.5rem',
+                color: '#4B5563',
+                fontSize: '0.8rem',
+                cursor: 'pointer',
+                fontWeight: 600,
+              }}
+              aria-label="Open command palette"
+            >
+              <span>🔍 Search routes...</span>
+              <kbd style={{ fontSize: '0.7rem', background: '#E5E7EB', padding: '0.1rem 0.35rem', borderRadius: '4px' }}>Ctrl+K</kbd>
+            </button>
 
             <div style={{ padding: '0.5rem 0.75rem', marginBottom: '0.75rem', background: '#F9FAFB', borderRadius: '0.5rem', fontSize: '0.8rem' }}>
               <div style={{ fontWeight: 700, color: '#111827' }}>Mandya Rural</div>
@@ -147,6 +171,26 @@ export default function App() {
               </PrefetchLink>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => window.dispatchEvent(new CustomEvent('quikooo:open-command-palette'))}
+                  style={{
+                    background: 'rgba(255,255,255,0.18)',
+                    border: '1px solid rgba(255,255,255,0.3)',
+                    color: '#FFFFFF',
+                    borderRadius: '9999px',
+                    padding: '0.25rem 0.65rem',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.35rem',
+                  }}
+                  aria-label="Open Ctrl+K Palette"
+                >
+                  <span>🔍</span>
+                  <span>Ctrl+K</span>
+                </button>
                 <span className="zone-chip">
                   <span>🌾</span>
                   <span>Mandya Rural (ZN-RUR-01)</span>
