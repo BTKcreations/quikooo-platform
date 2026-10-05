@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 
 const ToastContext = createContext({
   showToast: () => {},
@@ -15,6 +15,18 @@ export function ToastProvider({ children }) {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 2800);
   }, []);
+
+  // Listen for global custom events from API calls
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleToastEvent = (e) => {
+      if (e.detail?.message) {
+        showToast(e.detail.message, e.detail.type || 'error');
+      }
+    };
+    window.addEventListener('quikooo:toast', handleToastEvent);
+    return () => window.removeEventListener('quikooo:toast', handleToastEvent);
+  }, [showToast]);
 
   return (
     <ToastContext.Provider value={{ showToast }}>

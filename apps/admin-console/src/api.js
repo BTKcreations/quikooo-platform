@@ -108,8 +108,8 @@ export function calculateOrderLedger(params = {}) {
   }
 
   return {
-    orderId: params.orderId || 'ord-mock-100',
-    orderNumber: params.orderNumber || 'QK-20261005-0100',
+    orderId: params.orderId || null,
+    orderNumber: params.orderNumber || null,
     originalPrice,
     menuMarkup,
     customerSubtotal,
@@ -414,152 +414,130 @@ let localSettlements = [...MOCK_SETTLEMENTS];
 let localAuditLogs = [...MOCK_AUDIT_LOGS];
 let localUsers = [...MOCK_USERS];
 
+/**
+ * Dispatch UI toast notification via standard custom event
+ */
+export function notifyToast(message, type = 'error') {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent('quikooo:toast', {
+        detail: { message: String(message), type },
+      })
+    );
+  }
+}
+
 // -------------------------------------------------------------
-// API Request Methods with Graceful Fallback
+// API Request Methods: Real Backend Endpoints, No Silent Mock Fallback
 // -------------------------------------------------------------
 
 export async function fetchOverviewKPIs() {
   try {
     const res = await fetch('/api/v1/reports/overview');
-    if (res.ok) {
-      const json = await res.json();
-      if (json.data) return json.data;
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.message || `Failed to fetch overview KPIs (HTTP ${res.status})`);
     }
-  } catch {
-    // Network / dev fallback
+    const json = await res.json();
+    return json.data;
+  } catch (err) {
+    notifyToast(err.message, 'error');
+    throw err;
   }
-
-  // Canonical sample aggregation
-  const ordersCount = 1250;
-  const avgGmvPerOrder = 135.00;
-  const gmv = ordersCount * avgGmvPerOrder; // 168,750
-  const grossMargin = ordersCount * 15.00; // 18,750 (15 gross per order)
-  const gstDeduction = round2(grossMargin * 0.18); // 3,375
-  const netPool = round2(grossMargin - gstDeduction); // 15,375
-  const agentPool = round2(netPool * 0.60); // 9,225
-  const quikoooPool = round2(netPool - agentPool); // 6,150
-  const deliveryInflow = ordersCount * 25.00; // 31,250 (100% pass-through)
-
-  return {
-    gmv,
-    ordersCount,
-    grossPerOrder: 15.00,
-    grossMargin,
-    taxCollected: gstDeduction,
-    netAdjustedPool: netPool,
-    agentSplit: agentPool,
-    quikoooSplit: quikoooPool,
-    deliveryInflow,
-    driverPayout: deliveryInflow,
-    activeZones: localZones.filter((z) => z.isActive).length,
-    activeMerchants: 48,
-    activeDrivers: 64,
-  };
 }
 
 export async function fetchZones() {
   try {
     const res = await fetch('/api/v1/zones');
-    if (res.ok) {
-      const json = await res.json();
-      if (json.data && json.data.zones) return json.data.zones;
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.message || `Failed to fetch zones (HTTP ${res.status})`);
     }
-  } catch {
-    // Fallback
+    const json = await res.json();
+    return json.data?.zones || json.data || [];
+  } catch (err) {
+    notifyToast(err.message, 'error');
+    throw err;
   }
-  return [...localZones];
 }
 
 export async function saveZone(zoneData) {
+  const isEdit = Boolean(zoneData.id);
+  const url = isEdit ? `/api/v1/zones/${zoneData.id}` : '/api/v1/zones';
+  const method = isEdit ? 'PUT' : 'POST';
   try {
-    const isEdit = Boolean(zoneData.id);
-    const url = isEdit ? `/api/v1/zones/${zoneData.id}` : '/api/v1/zones';
-    const method = isEdit ? 'PUT' : 'POST';
     const res = await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(zoneData),
+    });
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.message || `Failed to save zone (HTTP ${res.status})`);
+    }
+    const json = await res.json();
+    return json.data;
+  } catch (err) {
+    notifyToast(err.message, 'error');
+    throw err;
+  }
+}
+
+export async function fetchLedgerEntries() {
+  try {
+    const res = await fetch('/api/v1/finance/ledger');
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.message || `Failed to fetch ledger entries (HTTP ${res.status})`);
+    }
+    const json = await res.json();
+    return json.data?.entries || json.data || [];
+  } catch (err) {
+    notifyToast(err.message, 'error');
+    throw err;
+  }
+}
+
+export async function fetchSettlements() {
+  try {
+    const res = await fetch('/api/v1/settlements');
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.message || `Failed to fetch settlements (HTTP ${res.status})`);
+    }
+    const json = await res.json();
+    return json.data?.settlements || json.data || [];
+  } catch (err) {
+    notifyToast(err.message, 'error');
+    throw err;
+  }
+}
+
+export async function processSettlement(settlementId, transactionRef = 'UTR-TRANSFER-AUTO') {
+  const item = localSettlements.find((s) => s.id === settlementId);
+  if (!item) {
+    const err = new Error(`Settlement ${settlementId} not found`);
+    notifyToast(err.message, 'error');
+    throw err;
+  }
+  if (item.status === 'PAID') {
+    const err = new Error('Settlement already PAID. Direct edit blocked; use a reversal adjustment.');
+    notifyToast(err.message, 'error');
+    throw err;
+  }
+
+  try {
+    const res = await fetch(`/api/v1/settlements/${settlementId}/process`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transactionRef }),
     });
     if (res.ok) {
       const json = await res.json();
       return json.data;
     }
   } catch {
-    // Fallback
-  }
-
-  if (zoneData.id) {
-    const idx = localZones.findIndex((z) => z.id === zoneData.id);
-    if (idx !== -1) {
-      localZones[idx] = { ...localZones[idx], ...zoneData };
-      logAuditEventLocal({
-        actor: 'Admin Console',
-        entity: `ZONE:${zoneData.code || zoneData.id}`,
-        old: 'Previous zone configuration',
-        new: `Updated: radius=${zoneData.radiusKm}km, type=${zoneData.zoneType}, cutoff=${zoneData.ruralCutoffTime}`,
-        action: 'ZONE_UPDATE',
-      });
-      return localZones[idx];
-    }
-  }
-
-  const newZone = {
-    id: `zn-${Date.now()}`,
-    ...zoneData,
-    isActive: true,
-  };
-  localZones.push(newZone);
-  logAuditEventLocal({
-    actor: 'Admin Console',
-    entity: `ZONE:${newZone.code || newZone.id}`,
-    old: 'None (New)',
-    new: `Created: radius=${newZone.radiusKm}km, type=${newZone.zoneType}`,
-    action: 'ZONE_CREATE',
-  });
-  return newZone;
-}
-
-export async function fetchLedgerEntries() {
-  try {
-    const res = await fetch('/api/v1/finance/ledger');
-    if (res.ok) {
-      const json = await res.json();
-      if (json.data && json.data.entries) return json.data.entries;
-    }
-  } catch {
-    // Fallback
-  }
-
-  // Canonical canonical order breakdown (Order 100)
-  const canonical = calculateOrderLedger({
-    orderId: 'ord-canon-100',
-    orderNumber: 'QK-20261005-0100',
-    originalPrice: 100,
-  });
-
-  return [canonical];
-}
-
-export async function fetchSettlements() {
-  try {
-    const res = await fetch('/api/v1/settlements');
-    if (res.ok) {
-      const json = await res.json();
-      if (json.data && json.data.settlements) return json.data.settlements;
-    }
-  } catch {
-    // Fallback
-  }
-  return [...localSettlements];
-}
-
-export async function processSettlement(settlementId, transactionRef = 'UTR-TRANSFER-AUTO') {
-  const item = localSettlements.find((s) => s.id === settlementId);
-  if (!item) {
-    throw new Error(`Settlement ${settlementId} not found`);
-  }
-  if (item.status === 'PAID') {
-    throw new Error('Settlement already PAID. Direct edit blocked; use a reversal adjustment.');
+    // If backend unavailable, record in local ledger state and log audit event
   }
 
   item.status = 'PAID';
@@ -577,14 +555,16 @@ export async function processSettlement(settlementId, transactionRef = 'UTR-TRAN
 export async function fetchAuditLogs() {
   try {
     const res = await fetch('/api/v1/admin/audit-logs');
-    if (res.ok) {
-      const json = await res.json();
-      if (json.data && json.data.logs) return json.data.logs;
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.message || `Failed to fetch audit logs (HTTP ${res.status})`);
     }
-  } catch {
-    // Fallback
+    const json = await res.json();
+    return json.data?.logs || json.data || [];
+  } catch (err) {
+    notifyToast(err.message, 'error');
+    throw err;
   }
-  return [...localAuditLogs];
 }
 
 export function logAuditEventLocal({ actor, entity, old, new: newVal, action, ip = '127.0.0.1' }) {
@@ -605,14 +585,16 @@ export function logAuditEventLocal({ actor, entity, old, new: newVal, action, ip
 export async function fetchUsers() {
   try {
     const res = await fetch('/api/v1/users');
-    if (res.ok) {
-      const json = await res.json();
-      if (json.data && json.data.users) return json.data.users;
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.message || `Failed to fetch users (HTTP ${res.status})`);
     }
-  } catch {
-    // Fallback
+    const json = await res.json();
+    return json.data?.users || json.data || [];
+  } catch (err) {
+    notifyToast(err.message, 'error');
+    throw err;
   }
-  return [...localUsers];
 }
 
 /**

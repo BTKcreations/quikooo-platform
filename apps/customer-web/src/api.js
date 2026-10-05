@@ -2,9 +2,24 @@
  * QUIKOOO Customer Web API Client
  * Connects to Express backend /api/v1
  * 2026 Perf: 60s In-Memory SWR Cache for GET / calculate, Debounce 300ms, Never Cache POST/.data
+ * Removal of Silent Stubs: On failure, throws real Error + dispatches UI toast
  */
 
 const API_BASE = '/api/v1';
+
+/**
+ * Dispatch UI toast notification via standard custom event
+ * Handled by ToastProvider in Toast.jsx
+ */
+export function notifyToast(message, type = 'error') {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent('quikooo:toast', {
+        detail: { message: String(message), type },
+      })
+    );
+  }
+}
 
 /**
  * In-Memory Stale-While-Revalidate Cache
@@ -39,7 +54,7 @@ export function debounce(fn, delay = 300) {
         try {
           const result = await fn.apply(this, args);
           resolve(result);
-        } catch (err) {
+        } catch {
           resolve(null);
         }
       }, delay);
@@ -89,10 +104,19 @@ async function apiRequest(endpoint, options = {}) {
       return cached.data;
     }
 
-    const res = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+    let res;
+    try {
+      res = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+    } catch (networkErr) {
+      const errMsg = `Network error: ${networkErr.message}`;
+      notifyToast(errMsg, 'error');
+      throw new Error(errMsg);
+    }
+
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
       const errorMsg = json.message || `Request failed with status ${res.status}`;
+      notifyToast(errorMsg, 'error');
       const err = new Error(errorMsg);
       err.status = res.status;
       err.data = json;
@@ -104,14 +128,22 @@ async function apiRequest(endpoint, options = {}) {
   }
 
   // Non-GET requests: NEVER CACHED
-  const res = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  let res;
+  try {
+    res = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers,
+    });
+  } catch (networkErr) {
+    const errMsg = `Network error: ${networkErr.message}`;
+    notifyToast(errMsg, 'error');
+    throw new Error(errMsg);
+  }
 
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
     const errorMsg = json.message || `Request failed with status ${res.status}`;
+    notifyToast(errorMsg, 'error');
     const err = new Error(errorMsg);
     err.status = res.status;
     err.data = json;
@@ -124,9 +156,25 @@ async function apiRequest(endpoint, options = {}) {
 /**
  * Authoritative Server Money Calculation
  * POST /api/v1/orders/calculate
- * Caches calculate responses in-memory for 60s by items fingerprint to provide zero-lag UI updates.
+ * Requires real vendorId and addressId. Never falls back to silent mock-address.
  */
-export async function calculateOrder({ vendorId, items, addressId = 'mock-address-1', zoneType = 'URBAN' }) {
+export async function calculateOrder({ vendorId, items, addressId, zoneType = 'URBAN' } = {}) {
+  if (!vendorId) {
+    const err = new Error('vendorId is required for order calculation');
+    notifyToast(err.message, 'error');
+    throw err;
+  }
+  if (!addressId) {
+    const err = new Error('addressId is required for order calculation');
+    notifyToast(err.message, 'error');
+    throw err;
+  }
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    const err = new Error('Cart must contain at least one item');
+    notifyToast(err.message, 'error');
+    throw err;
+  }
+
   const payload = {
     vendorId,
     addressId,
@@ -206,30 +254,34 @@ export async function getVendors() {
  * GET /api/v1/vendors/:id (Cached 60s)
  */
 export async function getVendorById(id) {
+  if (!id) {
+    throw new Error('Vendor ID is required');
+  }
   const res = await apiRequest(`/vendors/${id}`);
   return res.data || null;
 }
 
 /**
  * Fetch products for a vendor
- * GET /api/v1/vendors/:id/products (fallback to /products, Cached 60s)
+ * GET /api/v1/vendors/:id/products (fallback to /products?vendorId=, Cached 60s)
+ * Throws real Error on failure + displays toast
  */
 export async function getVendorProducts(vendorId) {
+  if (!vendorId) {
+    throw new Error('Vendor ID is required');
+  }
+
   try {
     const res = await apiRequest(`/vendors/${vendorId}/products`);
     if (res.data && res.data.length > 0) {
       return res.data;
     }
   } catch (err) {
-    // If not found, try fallback
+    // If route doesn't exist, try query parameter fallback
   }
 
-  try {
-    const res = await apiRequest(`/products?vendorId=${vendorId}`);
-    return res.data || [];
-  } catch (err) {
-    return [];
-  }
+  const fallbackRes = await apiRequest(`/products?vendorId=${vendorId}`);
+  return fallbackRes.data || [];
 }
 
 /**
@@ -237,6 +289,13 @@ export async function getVendorProducts(vendorId) {
  * POST /api/v1/orders - NEVER CACHED
  */
 export async function createOrder(orderData) {
+  if (!orderData || !orderData.vendorId) {
+    throw new Error('vendorId is required to create order');
+  }
+  if (!orderData.addressId) {
+    throw new Error('addressId is required to create order');
+  }
+
   const res = await apiRequest('/orders', {
     method: 'POST',
     body: JSON.stringify(orderData),
@@ -249,6 +308,9 @@ export async function createOrder(orderData) {
  * GET /api/v1/orders/:id
  */
 export async function getOrderById(id) {
+  if (!id) {
+    throw new Error('Order ID is required');
+  }
   const res = await apiRequest(`/orders/${id}`);
   return res.data;
 }

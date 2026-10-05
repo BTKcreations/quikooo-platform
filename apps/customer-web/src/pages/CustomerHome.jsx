@@ -101,85 +101,10 @@ export default function CustomerHome() {
       try {
         setLoading(true);
         const data = await getVendors();
-        if (data && data.length > 0) {
-          setVendors(data);
-        } else {
-          // Default mock vendors if DB empty
-          setVendors([
-            {
-              id: 'vendor-sample-1',
-              name: 'Curry & Spice Express',
-              businessType: 'RESTAURANT',
-              cuisine: 'North Indian, Biryani, Curries, Tandoor',
-              distanceKm: 1.2,
-              etaMinutes: 12,
-              rating: 4.8,
-              reviewsCount: 340,
-              image: 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=400&q=80',
-              isAcceptingOrders: true,
-            },
-            {
-              id: 'vendor-sample-2',
-              name: 'Fresh Harvest Daily',
-              businessType: 'GROCERY',
-              cuisine: 'Organic Vegetables, Dairy & Bakery, Eggs',
-              distanceKm: 0.8,
-              etaMinutes: 10,
-              rating: 4.9,
-              reviewsCount: 520,
-              image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400&q=80',
-              isAcceptingOrders: true,
-            },
-            {
-              id: 'vendor-sample-3',
-              name: 'The Green Bowl Co.',
-              businessType: 'RESTAURANT',
-              cuisine: 'Healthy Salads, Smoothies, Grain Bowls, Low Carb',
-              distanceKm: 1.7,
-              etaMinutes: 15,
-              rating: 4.7,
-              reviewsCount: 190,
-              image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&q=80',
-              isAcceptingOrders: true,
-            },
-            {
-              id: 'vendor-sample-4',
-              name: 'Royal Biryani House',
-              businessType: 'RESTAURANT',
-              cuisine: 'Hyderabadi Biryani, Kebab, Dum Biryani',
-              distanceKm: 1.9,
-              etaMinutes: 14,
-              rating: 4.8,
-              reviewsCount: 410,
-              image: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=400&q=80',
-              isAcceptingOrders: true,
-            },
-          ]);
-        }
+        setVendors(Array.isArray(data) ? data : []);
       } catch (err) {
-        console.warn('Backend offline, loading local defaults:', err.message);
-        setVendors([
-          {
-            id: 'vendor-sample-1',
-            name: 'Curry & Spice Express',
-            businessType: 'RESTAURANT',
-            cuisine: 'North Indian, Biryani, Curries',
-            distanceKm: 1.2,
-            etaMinutes: 12,
-            rating: 4.8,
-            isAcceptingOrders: true,
-          },
-          {
-            id: 'vendor-sample-2',
-            name: 'Fresh Harvest Daily',
-            businessType: 'GROCERY',
-            cuisine: 'Organic Vegetables, Dairy & Bakery',
-            distanceKm: 0.8,
-            etaMinutes: 10,
-            rating: 4.9,
-            isAcceptingOrders: true,
-          },
-        ]);
+        console.error('Failed to load vendors from API:', err.message);
+        setVendors([]);
       } finally {
         setLoading(false);
       }

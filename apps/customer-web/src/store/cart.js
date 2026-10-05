@@ -223,3 +223,72 @@ export function useCart() {
 }
 
 export default cart;
+
+// ============================================================================
+// OFFLINE-QUEUE: Customer Cart LocalStorage Outbox with Automatic Resync
+// Explicitly buffers orders when offline and replays them upon network reconnect
+// ============================================================================
+export const OFFLINE_OUTBOX_STORAGE_KEY = 'quikooo_cart_offline_outbox';
+
+export function getCartOfflineOutbox() {
+  if (typeof localStorage === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(OFFLINE_OUTBOX_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function enqueueCartOfflineOutbox(orderPayload) {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const queue = getCartOfflineOutbox();
+    const entry = {
+      queueId: `OFFLINE-QUEUE-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      label: 'OFFLINE-QUEUE',
+      payload: orderPayload,
+      enqueuedAt: new Date().toISOString(),
+      status: 'PENDING_RESYNC',
+    };
+    queue.push(entry);
+    localStorage.setItem(OFFLINE_OUTBOX_STORAGE_KEY, JSON.stringify(queue));
+    console.log('[OFFLINE-QUEUE] Order successfully buffered to offline outbox:', entry.queueId);
+    return entry;
+  } catch (err) {
+    console.warn('[OFFLINE-QUEUE Warning] Could not persist to localStorage:', err.message);
+    return null;
+  }
+}
+
+export function clearCartOfflineOutbox() {
+  if (typeof localStorage !== 'undefined') {
+    localStorage.removeItem(OFFLINE_OUTBOX_STORAGE_KEY);
+  }
+}
+
+export async function resyncCartOfflineOutbox(submitFn) {
+  if (typeof localStorage === 'undefined') return { synced: 0, failed: 0 };
+  const queue = getCartOfflineOutbox();
+  if (queue.length === 0) return { synced: 0, failed: 0 };
+
+  console.log(`[OFFLINE-QUEUE] Resyncing ${queue.length} buffered order(s)...`);
+  const remaining = [];
+  let synced = 0;
+  let failed = 0;
+
+  for (const item of queue) {
+    try {
+      if (typeof submitFn === 'function') {
+        await submitFn(item.payload);
+        synced += 1;
+      }
+    } catch {
+      failed += 1;
+      remaining.push(item);
+    }
+  }
+
+  localStorage.setItem(OFFLINE_OUTBOX_STORAGE_KEY, JSON.stringify(remaining));
+  return { synced, failed, remaining: remaining.length };
+}

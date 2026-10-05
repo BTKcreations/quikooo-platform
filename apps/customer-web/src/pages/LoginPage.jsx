@@ -20,21 +20,7 @@ export default function LoginPage() {
       });
       navigate('/customer');
     } catch (err) {
-      console.warn('Backend login unavailable, using simulated local session:', err.message);
-      // Simulated session
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem('quikooo_token', 'mock-jwt-customer-token');
-        localStorage.setItem(
-          'quikooo_user',
-          JSON.stringify({
-            id: 'mock-customer-1',
-            name: 'Demo Customer',
-            role: 'CUSTOMER',
-            phone: phoneOrEmail || '+91 9876543210',
-          })
-        );
-      }
-      navigate('/customer');
+      setError(err.message || 'Login failed. Please verify credentials or network connection.');
     } finally {
       setLoading(false);
     }
@@ -135,7 +121,7 @@ export default function LoginPage() {
             className="btn-secondary btn-block btn-sm"
             onClick={() => handleQuickLogin('CUSTOMER')}
           >
-            ⚡ Continue as Demo Customer
+            ⚡ DEMO: Continue as Demo Customer [DEMO]
           </button>
         </div>
       </div>

@@ -32,7 +32,9 @@
     "dev:merchant": "npm run dev --workspace=merchant-studio",
     "dev:driver": "npm run dev --workspace=driver-fleet",
     "dev:agent": "npm run dev --workspace=agent-app",
-    "dev:admin": "npm run dev --workspace=admin-console"
+    "dev:admin": "npm run dev --workspace=admin-console",
+    "db:migrate": "npm run db:migrate --workspace=backend",
+    "db:seed": "npm run db:seed --workspace=backend"
   },
   "keywords": [
     "hyperlocal",

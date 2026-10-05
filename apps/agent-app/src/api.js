@@ -335,6 +335,19 @@ export function calculateCutoffCountdown(currentTime = new Date()) {
 }
 
 /**
+ * Dispatch UI toast notification via standard custom event
+ */
+export function notifyToast(message, type = 'error') {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent('quikooo:toast', {
+        detail: { message: String(message), type },
+      })
+    );
+  }
+}
+
+/**
  * Generic API Fetch Helper with SWR Caching for GET
  */
 async function apiFetch(endpoint, options = {}) {
@@ -360,10 +373,19 @@ async function apiFetch(endpoint, options = {}) {
       return cached.data;
     }
 
-    const res = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+    let res;
+    try {
+      res = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+    } catch (networkErr) {
+      const errMsg = `Network error: ${networkErr.message}`;
+      notifyToast(errMsg, 'error');
+      throw new Error(errMsg);
+    }
+
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
       const errorMsg = json.message || `Request failed with status ${res.status}`;
+      notifyToast(errorMsg, 'error');
       const err = new Error(errorMsg);
       err.status = res.status;
       err.data = json;
@@ -374,14 +396,22 @@ async function apiFetch(endpoint, options = {}) {
   }
 
   // Non-GET requests: NEVER CACHED
-  const res = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  let res;
+  try {
+    res = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers,
+    });
+  } catch (networkErr) {
+    const errMsg = `Network error: ${networkErr.message}`;
+    notifyToast(errMsg, 'error');
+    throw new Error(errMsg);
+  }
 
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
     const errorMsg = json.message || `Request failed with status ${res.status}`;
+    notifyToast(errorMsg, 'error');
     const err = new Error(errorMsg);
     err.status = res.status;
     err.data = json;
@@ -400,40 +430,8 @@ async function apiFetch(endpoint, options = {}) {
  * @returns {Promise<Object>}
  */
 export async function getAgentAnalytics(agentId = 'agent-1') {
-  try {
-    const res = await apiFetch(`/agents/${agentId}/analytics`);
-    if (res && res.data) return res.data;
-  } catch (err) {
-    console.warn('[Agent API] GET /agents/:id/analytics fallback to stub:', err.message);
-  }
-
-  // Authoritative fallback stub matching platform economics (342 orders)
-  const ordersCount = 342;
-  const netEcon = calculateNetEconomics({
-    ordersCount,
-    adjustedContributionPerOrder: 13.94,
-    gmv: 46170.0,
-  });
-
-  return {
-    agentId,
-    agentCode: 'AG-ZN-RUR-01',
-    zoneId: 'zone-rural-1',
-    zoneName: 'Karnataka Rural Hub - South Sector',
-    totalVendors: 14,
-    activeVendors: 12,
-    totalDrivers: 18,
-    activeDrivers: 11,
-    totalOrders: ordersCount,
-    ruralScheduledOrders: 28,
-    zoneGmv: 46170.0,
-    adjustedContributionPool: netEcon.adjustedPool, // 4767.48
-    agentCommissionShare: netEcon.agentShare, // 2860.49 (60%)
-    platformShare: netEcon.quikoooShare, // 1906.99 (40%)
-    deliveryInflow: netEcon.deliveryInflow, // 8550.00 (342 * 25)
-    driverPayout: netEcon.driverPayout, // 8550.00
-    period: 'THIS_MONTH',
-  };
+  const res = await apiFetch(`/agents/${agentId}/analytics`);
+  return res.data;
 }
 
 /**
@@ -444,41 +442,8 @@ export async function getAgentAnalytics(agentId = 'agent-1') {
  * @returns {Promise<Object>}
  */
 export async function getAgentPayouts(agentId = 'agent-1') {
-  try {
-    const res = await apiFetch(`/agents/${agentId}/payouts`);
-    if (res && res.data) return res.data;
-  } catch (err) {
-    console.warn('[Agent API] GET /agents/:id/payouts fallback to stub:', err.message);
-  }
-
-  return {
-    agentId,
-    agentCode: 'AG-ZN-RUR-01',
-    zoneId: 'zone-rural-1',
-    commissionSharePercent: AGENT_SHARE_PERCENT,
-    totalEarned: 8360.0,
-    totalPaid: 6000.0,
-    pendingPayout: 2360.0,
-    currency: 'INR',
-    payoutHistory: [
-      {
-        id: 'PAY-20261001-01',
-        date: '2026-10-01',
-        amount: 3000.0,
-        status: 'PAID',
-        reference: 'NEFT-RBZ-889101',
-        bankAccount: '•••• 4521 (HDFC Bank)',
-      },
-      {
-        id: 'PAY-20260924-02',
-        date: '2026-09-24',
-        amount: 3000.0,
-        status: 'PAID',
-        reference: 'NEFT-RBZ-771890',
-        bankAccount: '•••• 4521 (HDFC Bank)',
-      },
-    ],
-  };
+  const res = await apiFetch(`/agents/${agentId}/payouts`);
+  return res.data;
 }
 
 /**
@@ -488,47 +453,8 @@ export async function getAgentPayouts(agentId = 'agent-1') {
  * @returns {Promise<Array>}
  */
 export async function getZones() {
-  try {
-    const res = await apiFetch('/zones');
-    if (res && res.data) return res.data;
-  } catch (err) {
-    console.warn('[Agent API] GET /zones fallback to stub:', err.message);
-  }
-
-  return [
-    {
-      id: 'zone-rural-1',
-      code: 'ZN-RUR-SOUTH-01',
-      name: 'Mandya & Maddur Rural Cluster',
-      type: 'RURAL',
-      radiusKm: 15.0,
-      cutoffTime: '21:00',
-      morningDispatchWindow: '05:00 - 08:00',
-      activeVendorsCount: 12,
-      activeDriversCount: 11,
-      assignedAgentId: 'agent-1',
-    },
-    {
-      id: 'zone-suburban-1',
-      code: 'ZN-SUB-BLR-02',
-      name: 'Kengeri Satellite Hub',
-      type: 'SUB_URBAN',
-      radiusKm: 2.0,
-      activeVendorsCount: 18,
-      activeDriversCount: 14,
-      assignedAgentId: 'agent-2',
-    },
-    {
-      id: 'zone-urban-1',
-      code: 'ZN-URB-BLR-01',
-      name: 'Indiranagar Urban Node',
-      type: 'URBAN',
-      radiusKm: 2.0,
-      activeVendorsCount: 24,
-      activeDriversCount: 16,
-      assignedAgentId: 'agent-3',
-    },
-  ];
+  const res = await apiFetch('/zones');
+  return res.data?.zones || res.data || [];
 }
 
 /**
@@ -777,40 +703,20 @@ let memoryBatchOrders = generateRuralBatchOrders();
  */
 export async function onboardVendor(vendorData) {
   if (!vendorData || !vendorData.name) {
-    throw new Error('Vendor name is required for onboarding');
+    const err = new Error('Vendor name is required for onboarding');
+    notifyToast(err.message, 'error');
+    throw err;
   }
 
-  try {
-    const res = await apiFetch('/vendors', {
-      method: 'POST',
-      body: JSON.stringify(vendorData),
-    });
-    if (res && res.data) {
-      memoryVendors.unshift(res.data);
-      return res.data;
-    }
-  } catch (err) {
-    console.warn('[Agent API] POST /vendors fallback to memory stub');
+  const res = await apiFetch('/vendors', {
+    method: 'POST',
+    body: JSON.stringify(vendorData),
+  });
+  if (res && res.data) {
+    memoryVendors.unshift(res.data);
+    return res.data;
   }
-
-  const newVendor = {
-    id: `ven-${Date.now().toString().slice(-4)}`,
-    name: vendorData.name,
-    ownerName: vendorData.ownerName || 'Store Proprietor',
-    phone: vendorData.phone || '+91 90000 00000',
-    category: vendorData.category || 'General Store',
-    zoneId: vendorData.zoneId || 'zone-rural-1',
-    status: 'ACTIVE',
-    commissionPercent: 10,
-    markupPercent: 5,
-    itemsCount: parseInt(vendorData.itemsCount, 10) || 0,
-    address: vendorData.address || 'Rural Zone Partner Hub',
-    joinedDate: new Date().toISOString().split('T')[0],
-    _stub: true,
-  };
-
-  memoryVendors.unshift(newVendor);
-  return newVendor;
+  return res;
 }
 
 /**
@@ -848,25 +754,20 @@ export async function getDrivers(zoneId = 'zone-rural-1') {
  */
 export async function onboardDriver(driverData) {
   if (!driverData || !driverData.name) {
-    throw new Error('Driver name is required');
+    const err = new Error('Driver name is required');
+    notifyToast(err.message, 'error');
+    throw err;
   }
 
-  const newDriver = {
-    id: `drv-${Date.now().toString().slice(-4)}`,
-    name: driverData.name,
-    phone: driverData.phone || '+91 90000 00000',
-    vehicle: driverData.vehicle || 'Motorcycle',
-    status: 'ON_DUTY',
-    zoneId: driverData.zoneId || 'zone-rural-1',
-    tripsCompleted: 0,
-    rating: 5.0,
-    joinedDate: new Date().toISOString().split('T')[0],
-    payoutTally: 0.0,
-    _stub: true,
-  };
-
-  memoryDrivers.unshift(newDriver);
-  return newDriver;
+  const res = await apiFetch('/delivery/register', {
+    method: 'POST',
+    body: JSON.stringify(driverData),
+  });
+  if (res && res.data) {
+    memoryDrivers.unshift(res.data);
+    return res.data;
+  }
+  return res;
 }
 
 /**

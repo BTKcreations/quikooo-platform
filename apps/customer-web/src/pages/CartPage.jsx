@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useCart } from '../store/cart.js';
+import { useCart, enqueueCartOfflineOutbox } from '../store/cart.js';
 import { calculateOrder, createOrder } from '../api.js';
 import { useToast } from '../components/Toast.jsx';
 
@@ -79,20 +79,17 @@ export default function CartPage() {
       let placedOrder;
       try {
         placedOrder = await createOrder(orderPayload);
+        cart.clearCart();
+        showToast('🎉 Order placed successfully!', 'success');
+        const orderId = placedOrder?.id || placedOrder?.orderNumber;
+        navigate(`/orders?success=1&id=${orderId}`);
       } catch (apiErr) {
-        console.warn('Backend order creation offline, generating local order confirmation:', apiErr.message);
-        placedOrder = {
-          id: `QK-ORD-${Date.now().toString(36).toUpperCase()}`,
-          orderNumber: `QK-2026-${Math.floor(1000 + Math.random() * 9000)}`,
-          status: 'ORDER_PLACED',
-          totalAmount: calculation?.customerPayable || 135.0,
-        };
+        // Enqueue to explicit OFFLINE-QUEUE outbox for automatic resync
+        enqueueCartOfflineOutbox(orderPayload);
+        cart.clearCart();
+        showToast('📡 OFFLINE-QUEUE: Network offline. Order queued in offline outbox for automatic resync.', 'info');
+        navigate('/orders?offline_queued=1');
       }
-
-      cart.clearCart();
-      showToast('🎉 Order placed successfully!', 'success');
-      const orderId = placedOrder?.id || placedOrder?.orderNumber || 'demo-order-1';
-      navigate(`/orders?success=1&id=${orderId}`);
     } catch (err) {
       setError(err.message || 'Failed to place order');
       showToast(err.message || 'Failed to place order', 'error');

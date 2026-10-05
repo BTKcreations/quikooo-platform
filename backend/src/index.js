@@ -52,13 +52,17 @@ if (config.nodeEnv !== 'test') {
 
 // Health Check Endpoints
 const healthCheckHandler = (req, res) => {
+  const isLive = db.isDbLive ? db.isDbLive() : db.isConnected();
+  const hasPostgis = db.hasPostgis ? db.hasPostgis() : false;
   res.status(200).json({
     status: 'ok',
     service: 'QUIKOOO Hyperlocal Commerce API',
     version: '1.0.0',
     phase: 'Phase 1 Foundation',
     timestamp: new Date().toISOString(),
-    databaseConnected: db.isConnected(),
+    db: isLive ? 'live' : 'mock',
+    postgis: Boolean(hasPostgis),
+    databaseConnected: isLive,
     timezone: config.zones.timezone,
   });
 };
