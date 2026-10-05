@@ -1,0 +1,39 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+
+/* Typography Utility Classes */
+.font-display {
+  font-family: var(--font-family-display, 'Outfit', sans-serif);
+}
+
+.font-body {
+  font-family: var(--font-family-body, 'Plus Jakarta Sans', sans-serif);
+}
+
+/* Headings */
+h1, h2, h3, h4, h5, h6, .heading-display {
+  font-family: var(--font-family-display, 'Outfit', sans-serif);
+  color: var(--color-text-primary, #111827);
+  letter-spacing: -0.02em;
+  margin-top: 0;
+}
+
+body, p, span, input, select, textarea, button {
+  font-family: var(--font-family-body, 'Plus Jakarta Sans', sans-serif);
+}
+
+.text-brand-primary {
+  color: var(--color-brand-primary, #059669);
+}
+
+.text-muted {
+  color: var(--color-text-muted, #9CA3AF);
+}
+
+.text-secondary {
+  color: var(--color-text-secondary, #4B5563);
+}
+
+.currency-symbol {
+  font-family: var(--font-family-display, 'Outfit', sans-serif);
+  font-weight: 600;
+}

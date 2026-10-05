@@ -1,0 +1,18 @@
+{
+  "name": "@quikooo/design-system",
+  "version": "1.0.0",
+  "description": "QUIKOOO Hyperlocal Commerce Platform Shared Design System and Theme Tokens",
+  "main": "index.js",
+  "style": "tokens.css",
+  "scripts": {
+    "test": "node --test tests/tokens.test.js"
+  },
+  "keywords": [
+    "design-system",
+    "quikooo",
+    "css-tokens",
+    "hyperlocal"
+  ],
+  "author": "QUIKOOO Team",
+  "license": "ISC"
+}

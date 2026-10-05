@@ -1,0 +1,28 @@
+{
+  "name": "quikooo-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "QUIKOOO Hyperlocal Commerce & Delivery Monorepo",
+  "workspaces": [
+    "backend",
+    "frontend/design-system",
+    "apps/customer-web"
+  ],
+  "scripts": {
+    "test": "npm test --workspace=backend && npm test --workspace=@quikooo/design-system && npm test --workspace=customer-web",
+    "test:backend": "npm test --workspace=backend",
+    "test:design": "npm test --workspace=@quikooo/design-system",
+    "test:customer": "npm test --workspace=customer-web",
+    "build": "npm run build --workspace=customer-web",
+    "dev:backend": "npm run dev --workspace=backend",
+    "dev:customer": "npm run dev --workspace=customer-web"
+  },
+  "keywords": [
+    "hyperlocal",
+    "pwa",
+    "ecommerce",
+    "quikooo"
+  ],
+  "author": "QUIKOOO Team",
+  "license": "ISC"
+}
