@@ -5,21 +5,27 @@ import {
   calculateRevenueSplit,
   calculateDeliveryInflow,
   calculateNetEconomics,
+  calculateEarningsSimulator,
   formatINR,
   AGENT_SHARE_PERCENT,
   QUIKOOO_SHARE_PERCENT,
 } from '../api.js';
+import Skeleton from '../components/Skeleton.jsx';
+import EmptyState from '../components/EmptyState.jsx';
+import { useToast } from '../components/Toast.jsx';
 
 export default function EarningsPage() {
+  const { showToast } = useToast();
+
   const [payouts, setPayouts] = useState(null);
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [requesting, setRequesting] = useState(false);
-  const [toastMsg, setToastMsg] = useState('');
 
-  // Interactive Canonical Simulator State
-  const [orderCount, setOrderCount] = useState(342);
-  const [contributionPerOrder, setContributionPerOrder] = useState(13.94);
+  // Interactive Simulator State: orders/day × avg → agent 60%
+  const [ordersPerDay, setOrdersPerDay] = useState(50);
+  const [avgContribution, setAvgContribution] = useState(13.94);
+  const [projectionDays, setProjectionDays] = useState(30);
 
   useEffect(() => {
     async function loadData() {
@@ -32,106 +38,86 @@ export default function EarningsPage() {
         setAnalytics(analyticsData);
       } catch (err) {
         console.error('Failed to load earnings:', err);
+        showToast('⚠️ Could not load financial ledger. Using offline cache.', 'error');
       } finally {
         setLoading(false);
       }
     }
     loadData();
-  }, []);
+  }, [showToast]);
 
   const handleRequestPayout = () => {
     setRequesting(true);
     setTimeout(() => {
       setRequesting(false);
-      setToastMsg('🎉 Settlement withdrawal request submitted to QUIKOOO Finance Ops!');
-      setTimeout(() => setToastMsg(''), 5000);
-    }, 1000);
+      showToast('🎉 Settlement withdrawal request submitted to QUIKOOO Finance Ops!', 'success');
+    }, 800);
   };
 
-  // Canonical Single-Order Split Example
-  const singleOrderSplit = calculateRevenueSplit(13.94);
-  const singleOrderDelivery = calculateDeliveryInflow(1);
-
-  // Dynamic Net Economics based on interactive order count
-  const netEcon = calculateNetEconomics({
-    ordersCount: orderCount,
-    adjustedContributionPerOrder: contributionPerOrder,
-    gmv: orderCount * 135.0,
+  // Run simulator math: (orders/day × avg → agent 60%)
+  const sim = calculateEarningsSimulator({
+    ordersPerDay,
+    avgContribution,
+    days: projectionDays,
   });
-
-  if (loading) {
-    return (
-      <div className="page-container" style={{ textAlign: 'center', padding: '3rem 1rem' }}>
-        <p style={{ color: '#4B5563', fontWeight: 600 }}>Loading Franchise Financial Ledger...</p>
-      </div>
-    );
-  }
 
   return (
     <div className="page-container">
-      {/* Toast Notification */}
-      {toastMsg && (
-        <div
-          style={{
-            position: 'fixed',
-            top: '4.5rem',
-            right: '1.5rem',
-            backgroundColor: '#065F46',
-            color: '#FFFFFF',
-            padding: '0.85rem 1.35rem',
-            borderRadius: '0.5rem',
-            boxShadow: '0 10px 20px -3px rgba(0, 0, 0, 0.25)',
-            zIndex: 99,
-            fontWeight: 700,
-            fontSize: '0.875rem',
-          }}
-        >
-          {toastMsg}
-        </div>
-      )}
-
       {/* Header */}
       <div className="page-header">
         <div>
           <h1 className="page-title">Franchise Earnings & 60/40 Revenue Ledger</h1>
           <p className="page-subtitle">
-            Local Zone Agent franchise profit-sharing: <strong>60% of Net Platform Margin</strong> (after GST). Delivery inflow is 100% isolated pass-through.
+            Local Zone Franchise Agent profit-sharing: <strong>60% of Net Platform Margin</strong> (after GST). Customer delivery fee is 100% isolated pass-through.
           </p>
         </div>
 
         <button
           className="btn-primary"
           onClick={handleRequestPayout}
-          disabled={requesting || (payouts?.pendingPayout || 0) <= 0}
+          disabled={requesting || loading || (payouts?.pendingPayout || 0) <= 0}
+          style={{ padding: '0.65rem 1.25rem', fontSize: '0.9rem' }}
         >
           {requesting ? 'Processing Request...' : `Withdraw Pending ${formatINR(payouts?.pendingPayout || 2360.0)}`}
         </button>
       </div>
 
-      {/* Primary Wallet Balances */}
+      {/* Primary Wallet Payout Cards */}
       <div className="stats-grid">
         <div className="stat-card">
           <div className="stat-label">Total Commission Earned</div>
-          <div className="stat-value" style={{ color: '#059669' }}>
-            {formatINR(payouts?.totalEarned || 8360.0)}
-          </div>
+          {loading ? (
+            <Skeleton width="70%" height="32px" />
+          ) : (
+            <div className="stat-value" style={{ color: '#059669' }}>
+              {formatINR(payouts?.totalEarned || 8360.0)}
+            </div>
+          )}
           <div className="stat-meta">Lifetime 60% franchise revenue share</div>
         </div>
 
         <div className="stat-card">
           <div className="stat-label">Settled / Paid to Bank</div>
-          <div className="stat-value" style={{ color: '#4B5563' }}>
-            {formatINR(payouts?.totalPaid || 6000.0)}
-          </div>
+          {loading ? (
+            <Skeleton width="70%" height="32px" />
+          ) : (
+            <div className="stat-value" style={{ color: '#4B5563' }}>
+              {formatINR(payouts?.totalPaid || 6000.0)}
+            </div>
+          )}
           <div className="stat-meta">Transferred via NEFT to HDFC Bank</div>
         </div>
 
         <div className="stat-card">
           <div className="stat-label">Pending Payout Balance</div>
-          <div className="stat-value" style={{ color: '#D97706' }}>
-            {formatINR(payouts?.pendingPayout || 2360.0)}
-          </div>
-          <div className="stat-meta">Available for weekly bank withdrawal</div>
+          {loading ? (
+            <Skeleton width="70%" height="32px" />
+          ) : (
+            <div className="stat-value" style={{ color: '#D97706' }}>
+              {formatINR(payouts?.pendingPayout || 2360.0)}
+            </div>
+          )}
+          <div className="stat-meta">Ready for weekly disbursement</div>
         </div>
 
         <div className="stat-card">
@@ -143,281 +129,385 @@ export default function EarningsPage() {
         </div>
       </div>
 
-      {/* Canonical Math Benchmark Card (13.94 -> 8.36 / 5.58) */}
-      <div
-        className="table-card"
-        style={{
-          marginBottom: '1.5rem',
-          padding: '1.5rem',
-          background: 'linear-gradient(135deg, #ECFDF5 0%, #FFFFFF 100%)',
-          border: '1px solid #A7F3D0',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
-          <div>
-            <h3 style={{ margin: 0, fontFamily: 'Outfit, sans-serif', fontSize: '1.25rem', color: '#065F46' }}>
-              📐 Official Canonical Order Benchmark (Original Listed Price = ₹100.00)
-            </h3>
-            <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.85rem', color: '#374151' }}>
-              Standard transaction anatomy per Section 1.2 of the Platform Plan:
-            </p>
-          </div>
-
-          <span
+      {/* Main 2-Column Responsive Layout for lg: screens */}
+      <div className="agent-2col-layout">
+        {/* Left Column: Earnings Simulator Slider (orders/day × avg → agent 60%) */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          {/* Earnings Simulator Card */}
+          <div
+            className="table-card"
             style={{
-              backgroundColor: '#059669',
-              color: '#FFFFFF',
-              fontWeight: 700,
-              fontSize: '0.8rem',
-              padding: '0.35rem 0.75rem',
-              borderRadius: '9999px',
+              padding: '1.5rem',
+              border: '2px solid #10B981',
+              borderRadius: '0.875rem',
+              boxShadow: '0 4px 14px rgba(16, 185, 129, 0.08)',
             }}
           >
-            60% AGENT / 40% PLATFORM
-          </span>
-        </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
+              <div>
+                <h2 style={{ margin: 0, fontFamily: 'Outfit, sans-serif', fontSize: '1.25rem', color: '#064E3B' }}>
+                  📈 Earnings Simulator (orders/day × avg → agent 60%)
+                </h2>
+                <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.85rem', color: '#4B5563' }}>
+                  Model your territory revenue based on daily order velocity and average margin.
+                </p>
+              </div>
 
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-            gap: '1rem',
-            backgroundColor: '#FFFFFF',
-            padding: '1.25rem',
-            borderRadius: '0.75rem',
-            border: '1px solid #E5E7EB',
-          }}
-        >
-          <div>
-            <div style={{ fontSize: '0.75rem', color: '#6B7280', fontWeight: 600 }}>1. LISTED & MARKUP</div>
-            <div style={{ fontSize: '1rem', fontWeight: 700, color: '#111827' }}>Original: ₹100.00</div>
-            <div style={{ fontSize: '0.8rem', color: '#4B5563' }}>+5% Menu Markup: ₹5.00</div>
-            <div style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 600 }}>Customer Menu: ₹105.00</div>
-          </div>
-
-          <div>
-            <div style={{ fontSize: '0.75rem', color: '#6B7280', fontWeight: 600 }}>2. VENDOR SETTLEMENT</div>
-            <div style={{ fontSize: '1rem', fontWeight: 700, color: '#111827' }}>Payout: ₹90.00</div>
-            <div style={{ fontSize: '0.8rem', color: '#4B5563' }}>Original ₹100 - 10% Comm</div>
-            <div style={{ fontSize: '0.8rem', color: '#6B7280' }}>(Comm charged on ₹100)</div>
-          </div>
-
-          <div>
-            <div style={{ fontSize: '0.75rem', color: '#6B7280', fontWeight: 600 }}>3. NET REVENUE POOL</div>
-            <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#111827', fontFamily: 'Outfit' }}>
-              ₹13.94
+              <span
+                style={{
+                  backgroundColor: '#ECFDF5',
+                  color: '#065F46',
+                  fontSize: '0.78rem',
+                  fontWeight: 800,
+                  padding: '0.3rem 0.65rem',
+                  borderRadius: '9999px',
+                  border: '1px solid #A7F3D0',
+                }}
+              >
+                60% AGENT COMMISSION
+              </span>
             </div>
-            <div style={{ fontSize: '0.75rem', color: '#4B5563' }}>
-              Gross ₹15.00 (₹5 + ₹10) less 18% GST (₹3.06 on ₹17 base)
+
+            {/* Slider 1: Orders / Day */}
+            <div style={{ marginBottom: '1.25rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <label style={{ fontSize: '0.9rem', fontWeight: 700, color: '#111827' }}>
+                  Orders per Day: <span style={{ color: '#059669', fontSize: '1.1rem' }}>{ordersPerDay}</span>
+                </label>
+                <div style={{ display: 'flex', gap: '0.35rem' }}>
+                  {[25, 50, 100, 200].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setOrdersPerDay(preset)}
+                      style={{
+                        padding: '0.2rem 0.5rem',
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        borderRadius: '0.375rem',
+                        border: '1px solid #D1D5DB',
+                        backgroundColor: ordersPerDay === preset ? '#059669' : '#FFFFFF',
+                        color: ordersPerDay === preset ? '#FFFFFF' : '#374151',
+                        cursor: 'pointer',
+                        minHeight: '28px',
+                      }}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <input
+                type="range"
+                min="5"
+                max="500"
+                step="5"
+                value={ordersPerDay}
+                onChange={(e) => setOrdersPerDay(Number(e.target.value))}
+                style={{ width: '100%', height: '8px', cursor: 'pointer', accentColor: '#059669' }}
+                aria-label="Orders per day simulator slider"
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#9CA3AF', marginTop: '0.25rem' }}>
+                <span>5 / day</span>
+                <span>250 / day</span>
+                <span>500 / day</span>
+              </div>
+            </div>
+
+            {/* Parameter 2: Avg Contribution / Order */}
+            <div style={{ marginBottom: '1.25rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <label style={{ fontSize: '0.85rem', fontWeight: 700, color: '#374151' }}>
+                  Avg Net Platform Margin / Order:
+                </label>
+                <span style={{ fontWeight: 800, color: '#111827' }}>{formatINR(avgContribution)}</span>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                {[
+                  { label: '₹10.00 (Snacks)', val: 10.0 },
+                  { label: '₹13.94 (Canonical)', val: 13.94 },
+                  { label: '₹20.00 (Farm Bulk)', val: 20.0 },
+                ].map((item) => (
+                  <button
+                    key={item.label}
+                    type="button"
+                    onClick={() => setAvgContribution(item.val)}
+                    style={{
+                      padding: '0.35rem 0.75rem',
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
+                      borderRadius: '0.5rem',
+                      border: '1px solid #D1D5DB',
+                      backgroundColor: avgContribution === item.val ? '#D1FAE5' : '#F9FAFB',
+                      color: avgContribution === item.val ? '#065F46' : '#4B5563',
+                      cursor: 'pointer',
+                      minHeight: '32px',
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Projection Formula Highlight */}
+            <div
+              style={{
+                backgroundColor: '#F0FDF4',
+                border: '1px solid #BBF7D0',
+                borderRadius: '0.75rem',
+                padding: '1rem',
+                marginBottom: '1.25rem',
+              }}
+            >
+              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#065F46', marginBottom: '0.25rem' }}>
+                SIMULATOR FORMULA: (orders/day × avg net margin → agent 60%)
+              </div>
+              <div style={{ fontFamily: 'monospace', fontSize: '0.9rem', color: '#166534', fontWeight: 700 }}>
+                {ordersPerDay} orders/day × {formatINR(avgContribution)} net margin = {formatINR(sim.dailyPool)} daily pool → Agent 60% = {formatINR(sim.dailyAgentEarnings)}/day
+              </div>
+            </div>
+
+            {/* Results Grid */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                gap: '1rem',
+                marginBottom: '1.25rem',
+              }}
+            >
+              <div style={{ backgroundColor: '#ECFDF5', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #A7F3D0' }}>
+                <div style={{ fontSize: '0.75rem', color: '#065F46', fontWeight: 700 }}>AGENT DAILY EARNINGS (60%)</div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#059669', fontFamily: 'Outfit' }}>
+                  {formatINR(sim.dailyAgentEarnings)}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#047857' }}>From {formatINR(sim.dailyPool)} daily pool</div>
+              </div>
+
+              <div style={{ backgroundColor: '#F3F4F6', padding: '1rem', borderRadius: '0.5rem' }}>
+                <div style={{ fontSize: '0.75rem', color: '#4B5563', fontWeight: 700 }}>QUIKOOO DAILY SHARE (40%)</div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#374151', fontFamily: 'Outfit' }}>
+                  {formatINR(sim.dailyQuikoooShare)}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#6B7280' }}>Platform retained share</div>
+              </div>
+
+              <div style={{ backgroundColor: '#EFF6FF', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #BFDBFE' }}>
+                <div style={{ fontSize: '0.75rem', color: '#1E40AF', fontWeight: 700 }}>30-DAY MONTHLY PROJECTED</div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#2563EB', fontFamily: 'Outfit' }}>
+                  {formatINR(sim.monthlyAgentEarnings)}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#1E40AF' }}>Based on {sim.monthlyOrders} monthly orders</div>
+              </div>
+            </div>
+
+            {/* 60/40 Split Bar Visualizer */}
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.35rem' }}>
+                <span style={{ color: '#059669' }}>Local Zone Agent: 60% ({formatINR(sim.monthlyAgentEarnings)})</span>
+                <span style={{ color: '#4B5563' }}>Quikooo Platform: 40% ({formatINR(sim.monthlyQuikoooShare)})</span>
+              </div>
+              <div style={{ height: '12px', width: '100%', backgroundColor: '#E5E7EB', borderRadius: '9999px', overflow: 'hidden', display: 'flex' }}>
+                <div style={{ width: '60%', backgroundColor: '#059669' }} />
+                <div style={{ width: '40%', backgroundColor: '#4B5563' }} />
+              </div>
             </div>
           </div>
 
-          <div style={{ backgroundColor: '#F0FDF4', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #BBF7D0' }}>
-            <div style={{ fontSize: '0.75rem', color: '#065F46', fontWeight: 700 }}>4. AGENT 60% SHARE</div>
-            <div style={{ fontSize: '1.35rem', fontWeight: 800, color: '#059669', fontFamily: 'Outfit' }}>
-              ₹8.36
-            </div>
-            <div style={{ fontSize: '0.75rem', color: '#047857' }}>
-              60% of ₹13.94 net revenue (Quikooo 40% = ₹5.58)
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Critical Policy: Delivery Inflow (25 * n) Isolated Separate */}
-      <div
-        style={{
-          backgroundColor: '#EFF6FF',
-          border: '1px solid #BFDBFE',
-          borderRadius: '0.875rem',
-          padding: '1.25rem',
-          marginBottom: '1.5rem',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-          <span style={{ fontSize: '1.5rem' }}>🛡️</span>
-          <strong style={{ fontSize: '1.05rem', color: '#1E40AF', fontFamily: 'Outfit' }}>
-            Logistics Policy: Customer Delivery Inflow (₹25.00 * n) Kept Strictly Separate
-          </strong>
-        </div>
-
-        <p style={{ margin: 0, fontSize: '0.875rem', color: '#1E3A8A', lineHeight: 1.5 }}>
-          The ₹25.00 delivery fee charged to the customer is a <strong>100% pass-through logistics settlement</strong> paid directly to the assigned delivery partner upon completed delivery.
-          It does <em>not</em> form part of the platform margin pool, is <em>not</em> subject to the 60/40 revenue split, and cannot be used to inflate agent earnings or platform commissions.
-        </p>
-
-        <div
-          style={{
-            marginTop: '1rem',
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-            gap: '1rem',
-            backgroundColor: '#FFFFFF',
-            padding: '1rem',
-            borderRadius: '0.5rem',
-          }}
-        >
-          <div>
-            <div style={{ fontSize: '0.75rem', color: '#6B7280', fontWeight: 600 }}>CUSTOMER INFLOW PER ORDER</div>
-            <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#111827' }}>+ ₹25.00</div>
-          </div>
-          <div>
-            <div style={{ fontSize: '0.75rem', color: '#6B7280', fontWeight: 600 }}>DRIVER PAYOUT PER ORDER</div>
-            <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#DC2626' }}>- ₹25.00</div>
-          </div>
-          <div>
-            <div style={{ fontSize: '0.75rem', color: '#6B7280', fontWeight: 600 }}>NET PLATFORM RETENTION</div>
-            <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#059669' }}>₹0.00 (Pass-Through)</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Holistic Territory Net Economics Simulator */}
-      <div className="table-card" style={{ marginBottom: '1.5rem', padding: '1.5rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
-          <div>
-            <h3 style={{ margin: 0, fontFamily: 'Outfit, sans-serif', fontSize: '1.2rem' }}>
-              Territory Net Economics Breakdown
+          {/* Territory Net Economics Breakdown Table */}
+          <div className="table-card" style={{ padding: '1.25rem' }}>
+            <h3 style={{ margin: '0 0 0.5rem 0', fontFamily: 'Outfit, sans-serif', fontSize: '1.1rem' }}>
+              Full Economic Ledger Composition
             </h3>
-            <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.85rem', color: '#6B7280' }}>
-              Scale economics across monthly completed order volume:
+            <p style={{ margin: '0 0 1rem 0', fontSize: '0.825rem', color: '#6B7280' }}>
+              Comparing platform contribution margin against logistics pass-through flows.
+            </p>
+
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Component</th>
+                  <th>Formula</th>
+                  <th>Pool Value</th>
+                  <th>Agent (60%)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Platform Contribution Margin</strong></td>
+                  <td>{ordersPerDay * 30} orders × {formatINR(avgContribution)}</td>
+                  <td style={{ fontWeight: 700, fontFamily: 'Outfit' }}>{formatINR(sim.monthlyPool)}</td>
+                  <td style={{ fontWeight: 700, color: '#059669', fontFamily: 'Outfit' }}>{formatINR(sim.monthlyAgentEarnings)}</td>
+                </tr>
+                <tr>
+                  <td><strong>Delivery Fee Inflow (Pass-Through)</strong></td>
+                  <td>{ordersPerDay * 30} orders × ₹25.00</td>
+                  <td style={{ fontWeight: 700, color: '#0284C7', fontFamily: 'Outfit' }}>{formatINR(ordersPerDay * 30 * 25)}</td>
+                  <td style={{ color: '#9CA3AF' }}>₹0.00 (Driver 100%)</td>
+                </tr>
+                <tr style={{ backgroundColor: '#F9FAFB' }}>
+                  <td><strong>TOTAL AGENT EARNINGS</strong></td>
+                  <td>Pure 60% franchise split</td>
+                  <td style={{ fontWeight: 800, fontFamily: 'Outfit' }}>{formatINR(sim.monthlyPool)}</td>
+                  <td style={{ fontWeight: 800, color: '#059669', fontSize: '1.1rem', fontFamily: 'Outfit' }}>
+                    {formatINR(sim.monthlyAgentEarnings)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Right Column: Canonical Order Benchmark & Payout Settlement History Cards */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          {/* Canonical Benchmark Card (Original Price = ₹100.00) */}
+          <div
+            className="table-card"
+            style={{
+              padding: '1.25rem',
+              background: 'linear-gradient(135deg, #ECFDF5 0%, #FFFFFF 100%)',
+              border: '1px solid #A7F3D0',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+              <h3 style={{ margin: 0, fontFamily: 'Outfit, sans-serif', fontSize: '1.1rem', color: '#065F46' }}>
+                📐 Canonical Order Benchmark (₹100 Listed)
+              </h3>
+              <span
+                style={{
+                  backgroundColor: '#059669',
+                  color: '#FFFFFF',
+                  fontWeight: 800,
+                  fontSize: '0.72rem',
+                  padding: '0.2rem 0.5rem',
+                  borderRadius: '9999px',
+                }}
+              >
+                60/40 SPLIT
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.85rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.35rem 0', borderBottom: '1px solid #E5E7EB' }}>
+                <span style={{ color: '#4B5563' }}>Original Listed Price</span>
+                <span style={{ fontWeight: 700 }}>₹100.00</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.35rem 0', borderBottom: '1px solid #E5E7EB' }}>
+                <span style={{ color: '#4B5563' }}>+5% Menu Markup</span>
+                <span style={{ fontWeight: 700, color: '#059669' }}>+ ₹5.00</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.35rem 0', borderBottom: '1px solid #E5E7EB' }}>
+                <span style={{ color: '#4B5563' }}>Vendor Settlement (-10% Comm)</span>
+                <span style={{ fontWeight: 700 }}>₹90.00</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.35rem 0', borderBottom: '1px solid #E5E7EB' }}>
+                <span style={{ color: '#4B5563' }}>Platform Fee + Delivery Fee</span>
+                <span style={{ fontWeight: 700 }}>₹5.00 + ₹25.00</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.35rem 0', borderBottom: '1px solid #E5E7EB' }}>
+                <span style={{ color: '#4B5563' }}>Net Revenue Pool (after GST)</span>
+                <span style={{ fontWeight: 800, color: '#111827', fontFamily: 'Outfit' }}>₹13.94</span>
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  padding: '0.5rem 0.75rem',
+                  backgroundColor: '#D1FAE5',
+                  borderRadius: '0.5rem',
+                  marginTop: '0.25rem',
+                }}
+              >
+                <strong style={{ color: '#065F46' }}>Agent 60% Share</strong>
+                <strong style={{ color: '#059669', fontSize: '1.1rem', fontFamily: 'Outfit' }}>₹8.36</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.25rem 0.75rem', color: '#6B7280', fontSize: '0.78rem' }}>
+                <span>Quikooo 40% Share</span>
+                <span>₹5.58</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Delivery Inflow Isolation Policy Card */}
+          <div
+            style={{
+              backgroundColor: '#EFF6FF',
+              border: '1px solid #BFDBFE',
+              borderRadius: '0.875rem',
+              padding: '1.25rem',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
+              <span style={{ fontSize: '1.25rem' }}>🛡️</span>
+              <strong style={{ fontSize: '0.95rem', color: '#1E40AF', fontFamily: 'Outfit, sans-serif' }}>
+                Logistics Isolation Policy: ₹25.00 Delivery Fee
+              </strong>
+            </div>
+            <p style={{ margin: 0, fontSize: '0.8rem', color: '#1E3A8A', lineHeight: 1.4 }}>
+              The ₹25.00 delivery fee is 100% passed through directly to assigned delivery partners upon trip completion. It does not enter the platform margin pool and is excluded from agent commission calculations.
             </p>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, maxWidth: '420px' }}>
-            <label style={{ fontSize: '0.85rem', fontWeight: 600, whiteSpace: 'nowrap' }}>Orders Slider:</label>
-            <input
-              type="range"
-              min="10"
-              max="2500"
-              step="10"
-              value={orderCount}
-              onChange={(e) => setOrderCount(Number(e.target.value))}
-              style={{ flex: 1, cursor: 'pointer' }}
-              aria-label="Order volume simulator slider"
-            />
-            <input
-              type="number"
-              min="1"
-              max="10000"
-              className="form-input"
-              style={{ width: '85px', padding: '0.35rem 0.6rem' }}
-              value={orderCount}
-              onChange={(e) => setOrderCount(Math.max(1, parseInt(e.target.value, 10) || 1))}
-              aria-label="Order volume number"
-            />
+          {/* Franchise Bank Transfer Settlement History Cards */}
+          <div className="table-card">
+            <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid #F3F4F0', backgroundColor: '#FAFAFA' }}>
+              <h3 style={{ margin: 0, fontFamily: 'Outfit, sans-serif', fontSize: '1.05rem' }}>
+                Bank Settlement Transfer History
+              </h3>
+            </div>
+
+            <div style={{ padding: '0.75rem' }}>
+              {loading ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <Skeleton height="60px" borderRadius="0.5rem" />
+                  <Skeleton height="60px" borderRadius="0.5rem" />
+                </div>
+              ) : (payouts?.payoutHistory || []).length === 0 ? (
+                <div style={{ padding: '1.5rem', textAlign: 'center', color: '#9CA3AF', fontSize: '0.85rem' }}>
+                  No historical settlement records.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  {(payouts?.payoutHistory || []).map((payout) => (
+                    <div
+                      key={payout.id}
+                      style={{
+                        border: '1px solid #E5E7EB',
+                        borderRadius: '0.5rem',
+                        padding: '0.85rem 1rem',
+                        backgroundColor: '#FFFFFF',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontWeight: 700, fontFamily: 'monospace', fontSize: '0.875rem' }}>
+                          {payout.reference}
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: '#6B7280', marginTop: '0.15rem' }}>
+                          {payout.date} • {payout.bankAccount}
+                        </div>
+                      </div>
+
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontFamily: 'Outfit', fontWeight: 800, fontSize: '1.05rem', color: '#059669' }}>
+                          {formatINR(payout.amount)}
+                        </div>
+                        <span className="status-pill status-active" style={{ fontSize: '0.65rem' }}>
+                          ● {payout.status}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
-
-
-        {/* 60/40 Split Bar Visualizer */}
-        <div style={{ marginBottom: '1.25rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.35rem' }}>
-            <span style={{ color: '#059669' }}>Local Zone Agent: 60% ({formatINR(netEcon.agentShare)})</span>
-            <span style={{ color: '#4B5563' }}>Quikooo Platform: 40% ({formatINR(netEcon.quikoooShare)})</span>
-          </div>
-
-          <div style={{ height: '14px', width: '100%', backgroundColor: '#E5E7EB', borderRadius: '9999px', overflow: 'hidden', display: 'flex' }}>
-            <div style={{ width: '60%', backgroundColor: '#059669' }} />
-            <div style={{ width: '40%', backgroundColor: '#4B5563' }} />
-          </div>
-        </div>
-
-        {/* Breakdown Summary Grid */}
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Economic Component</th>
-              <th>Calculation Formula</th>
-              <th>Pool Amount</th>
-              <th>Franchise Agent Share (60%)</th>
-              <th>Platform HQ Share (40%)</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>
-                <strong>Net Revenue Contribution Pool</strong>
-              </td>
-              <td>{orderCount} orders × ₹13.94 net margin</td>
-              <td style={{ fontWeight: 700, fontFamily: 'Outfit' }}>{formatINR(netEcon.adjustedPool)}</td>
-              <td style={{ fontWeight: 700, color: '#059669', fontFamily: 'Outfit' }}>{formatINR(netEcon.agentShare)}</td>
-              <td style={{ fontWeight: 700, color: '#4B5563', fontFamily: 'Outfit' }}>{formatINR(netEcon.quikoooShare)}</td>
-            </tr>
-            <tr>
-              <td>
-                <strong>Delivery Fee Inflow (Logistics)</strong>
-              </td>
-              <td>{orderCount} orders × ₹25.00 inflow</td>
-              <td style={{ fontWeight: 700, color: '#0284C7', fontFamily: 'Outfit' }}>{formatINR(netEcon.deliveryInflow)}</td>
-              <td style={{ color: '#9CA3AF' }}>₹0.00 (Pass-Through)</td>
-              <td style={{ color: '#9CA3AF' }}>₹0.00 (Pass-Through)</td>
-            </tr>
-            <tr>
-              <td>
-                <strong>Driver Partner Payout (Outflow)</strong>
-              </td>
-              <td>{orderCount} orders × ₹25.00 payout</td>
-              <td style={{ fontWeight: 700, color: '#DC2626', fontFamily: 'Outfit' }}>- {formatINR(netEcon.driverPayout)}</td>
-              <td style={{ color: '#9CA3AF' }}>Paid directly to riders</td>
-              <td style={{ color: '#9CA3AF' }}>Paid directly to riders</td>
-            </tr>
-            <tr style={{ backgroundColor: '#F9FAFB' }}>
-              <td>
-                <strong>NET AGENT EARNINGS</strong>
-              </td>
-              <td>60% of Net Platform Margin</td>
-              <td style={{ fontWeight: 800, fontFamily: 'Outfit' }}>{formatINR(netEcon.adjustedPool)}</td>
-              <td style={{ fontWeight: 800, color: '#059669', fontSize: '1.1rem', fontFamily: 'Outfit' }}>
-                {formatINR(netEcon.totalAgentEarnings)}
-              </td>
-              <td style={{ fontWeight: 800, color: '#4B5563', fontSize: '1.1rem', fontFamily: 'Outfit' }}>
-                {formatINR(netEcon.quikoooShare)}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      {/* Payout Settlements History */}
-      <div className="table-card">
-        <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid #F3F4F0', backgroundColor: '#FAFAFA' }}>
-          <h3 style={{ margin: 0, fontFamily: 'Outfit, sans-serif', fontSize: '1.1rem' }}>
-            Franchise Bank Transfer Settlement History
-          </h3>
-        </div>
-
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Settlement Reference</th>
-              <th>Transfer Date</th>
-              <th>Disbursed Amount</th>
-              <th>Destination Bank Account</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(payouts?.payoutHistory || []).map((payout) => (
-              <tr key={payout.id}>
-                <td>
-                  <span style={{ fontWeight: 700, fontFamily: 'monospace' }}>{payout.reference}</span>
-                  <div style={{ fontSize: '0.75rem', color: '#6B7280' }}>ID: {payout.id}</div>
-                </td>
-                <td>{payout.date}</td>
-                <td>
-                  <strong style={{ color: '#059669', fontFamily: 'Outfit', fontSize: '1rem' }}>
-                    {formatINR(payout.amount)}
-                  </strong>
-                </td>
-                <td>{payout.bankAccount}</td>
-                <td>
-                  <span className="status-pill status-active">● {payout.status}</span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
       </div>
     </div>
   );

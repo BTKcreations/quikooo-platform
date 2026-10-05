@@ -205,7 +205,58 @@ export function calculateNetEconomics({
 }
 
 /**
+ * Calculates earnings simulator math: (orders/day × avg net margin → agent 60%)
+ * 
+ * @param {Object|number} arg1 - options object or ordersPerDay number
+ * @param {number} [arg2=13.94] - avg net platform contribution/margin per order
+ * @param {number} [arg3=30] - days in projection window (default 30)
+ * @returns {Object}
+ */
+export function calculateEarningsSimulator(arg1 = 50, arg2 = 13.94, arg3 = 30) {
+  let ordersPerDay, avgContribution, days, agentPercent;
+  if (typeof arg1 === 'object' && arg1 !== null) {
+    ordersPerDay = arg1.ordersPerDay ?? 50;
+    avgContribution = arg1.avgContribution ?? arg1.avg ?? 13.94;
+    days = arg1.days ?? 30;
+    agentPercent = arg1.agentPercent ?? AGENT_SHARE_PERCENT;
+  } else {
+    ordersPerDay = arg1;
+    avgContribution = arg2 ?? 13.94;
+    days = arg3 ?? 30;
+    agentPercent = AGENT_SHARE_PERCENT;
+  }
+
+  const opd = Math.max(0, Number(ordersPerDay) || 0);
+  const avg = Math.max(0, Number(avgContribution) || 0);
+  const totalDays = Math.max(1, Number(days) || 30);
+
+  const dailyPool = round2(opd * avg);
+  const dailyAgentEarnings = round2(dailyPool * (agentPercent / 100));
+  const dailyQuikoooShare = round2(dailyPool - dailyAgentEarnings);
+
+  const monthlyOrders = opd * totalDays;
+  const monthlyPool = round2(monthlyOrders * avg);
+  const monthlyAgentEarnings = round2(monthlyPool * (agentPercent / 100));
+  const monthlyQuikoooShare = round2(monthlyPool - monthlyAgentEarnings);
+
+  return {
+    ordersPerDay: opd,
+    avgContribution: avg,
+    days: totalDays,
+    dailyPool,
+    dailyAgentEarnings,
+    dailyQuikoooShare,
+    monthlyOrders,
+    monthlyPool,
+    monthlyAgentEarnings,
+    monthlyQuikoooShare,
+    agentPercent,
+  };
+}
+
+/**
  * In-Memory 60s SWR Cache for GET requests
+
  */
 const apiCache = new Map();
 const CACHE_TTL_MS = 60 * 1000;
@@ -593,71 +644,129 @@ let memoryDrivers = [
   },
 ];
 
-let memoryBatchOrders = [
-  {
-    id: 'ord-rur-901',
-    orderNumber: 'QK-RUR-20261005-01',
-    customerName: 'Giridhariah M.',
-    village: 'Gejjalagere Hamlet #2',
-    items: [
-      { name: 'Kaveri Farm Fresh Milk (1L)', qty: 2, vendor: 'Kaveri Fresh Organics' },
-      { name: 'Local Farm Eggs (Pack of 12)', qty: 1, vendor: 'Green Field Poultry' },
-    ],
-    originalTotal: 160.0,
-    customerPayable: 198.0,
-    status: 'SCHEDULED_FOR_NEXT_DAY',
-    placedAt: '2026-10-05T18:45:00.000Z',
-    deliveryDate: '2026-10-06',
-    window: '05:00 - 08:00',
-  },
-  {
-    id: 'ord-rur-902',
-    orderNumber: 'QK-RUR-20261005-02',
-    customerName: 'Shanthamma Gowda',
-    village: 'Koppa Grama Cross',
-    items: [
-      { name: 'Whole Wheat Atta (5kg)', qty: 1, vendor: 'Sri Lakshmi Provisions' },
-      { name: 'Cold Pressed Sunflower Oil (1L)', qty: 1, vendor: 'Sri Lakshmi Provisions' },
-    ],
-    originalTotal: 340.0,
-    customerPayable: 387.0,
-    status: 'SCHEDULED_FOR_NEXT_DAY',
-    placedAt: '2026-10-05T19:30:00.000Z',
-    deliveryDate: '2026-10-06',
-    window: '05:00 - 08:00',
-  },
-  {
-    id: 'ord-rur-903',
-    orderNumber: 'QK-RUR-20261005-03',
-    customerName: 'Hemanth Kumar',
-    village: 'Maddur Station Outskirts',
-    items: [
-      { name: 'Fresh Country Curd (500g)', qty: 2, vendor: 'Kaveri Fresh Organics' },
-      { name: 'Morning Filter Coffee Powder (250g)', qty: 1, vendor: 'Annapoorna Country Kitchen' },
-    ],
-    originalTotal: 180.0,
-    customerPayable: 219.0,
-    status: 'SCHEDULED_FOR_NEXT_DAY',
-    placedAt: '2026-10-05T20:15:00.000Z',
-    deliveryDate: '2026-10-06',
-    window: '05:00 - 08:00',
-  },
-  {
-    id: 'ord-rur-904',
-    orderNumber: 'QK-RUR-20261005-04',
-    customerName: 'Mahadevappa B.',
-    village: 'Shivalli Extension',
-    items: [
-      { name: 'Sona Masoori Rice (10kg)', qty: 1, vendor: 'Sri Lakshmi Provisions' },
-    ],
-    originalTotal: 650.0,
-    customerPayable: 712.5,
-    status: 'SCHEDULED_FOR_NEXT_DAY',
-    placedAt: '2026-10-05T20:55:00.000Z',
-    deliveryDate: '2026-10-06',
-    window: '05:00 - 08:00',
-  },
+const baseHamlets = [
+  'Gejjalagere Hamlet #2',
+  'Koppa Grama Cross',
+  'Maddur Station Outskirts',
+  'Shivalli Extension',
+  'Keragodu Cluster',
+  'Besagarahalli Gate',
 ];
+
+const sampleItemsPool = [
+  { name: 'Kaveri Farm Fresh Milk (1L)', price: 40, vendor: 'Kaveri Fresh Organics' },
+  { name: 'Local Farm Eggs (Pack of 12)', price: 80, vendor: 'Green Field Poultry' },
+  { name: 'Whole Wheat Atta (5kg)', price: 210, vendor: 'Sri Lakshmi Provisions' },
+  { name: 'Cold Pressed Sunflower Oil (1L)', price: 130, vendor: 'Sri Lakshmi Provisions' },
+  { name: 'Fresh Country Curd (500g)', price: 35, vendor: 'Kaveri Fresh Organics' },
+  { name: 'Morning Filter Coffee Powder (250g)', price: 110, vendor: 'Annapoorna Country Kitchen' },
+  { name: 'Sona Masoori Rice (10kg)', price: 650, vendor: 'Sri Lakshmi Provisions' },
+  { name: 'Pure Country Ghee (500ml)', price: 340, vendor: 'Kaveri Fresh Organics' },
+  { name: 'Organic Jaggery Block (1kg)', price: 75, vendor: 'Mandya Sugars Cooperative' },
+];
+
+function generateRuralBatchOrders() {
+  const list = [
+    {
+      id: 'ord-rur-901',
+      orderNumber: 'QK-RUR-20261005-01',
+      customerName: 'Giridhariah M.',
+      village: 'Gejjalagere Hamlet #2',
+      items: [
+        { name: 'Kaveri Farm Fresh Milk (1L)', qty: 2, vendor: 'Kaveri Fresh Organics' },
+        { name: 'Local Farm Eggs (Pack of 12)', qty: 1, vendor: 'Green Field Poultry' },
+      ],
+      originalTotal: 160.0,
+      customerPayable: 198.0,
+      status: 'SCHEDULED_FOR_NEXT_DAY',
+      placedAt: '2026-10-05T18:45:00.000Z',
+      deliveryDate: '2026-10-06',
+      window: '05:00 - 08:00',
+    },
+    {
+      id: 'ord-rur-902',
+      orderNumber: 'QK-RUR-20261005-02',
+      customerName: 'Shanthamma Gowda',
+      village: 'Koppa Grama Cross',
+      items: [
+        { name: 'Whole Wheat Atta (5kg)', qty: 1, vendor: 'Sri Lakshmi Provisions' },
+        { name: 'Cold Pressed Sunflower Oil (1L)', qty: 1, vendor: 'Sri Lakshmi Provisions' },
+      ],
+      originalTotal: 340.0,
+      customerPayable: 387.0,
+      status: 'SCHEDULED_FOR_NEXT_DAY',
+      placedAt: '2026-10-05T19:30:00.000Z',
+      deliveryDate: '2026-10-06',
+      window: '05:00 - 08:00',
+    },
+    {
+      id: 'ord-rur-903',
+      orderNumber: 'QK-RUR-20261005-03',
+      customerName: 'Hemanth Kumar',
+      village: 'Maddur Station Outskirts',
+      items: [
+        { name: 'Fresh Country Curd (500g)', qty: 2, vendor: 'Kaveri Fresh Organics' },
+        { name: 'Morning Filter Coffee Powder (250g)', qty: 1, vendor: 'Annapoorna Country Kitchen' },
+      ],
+      originalTotal: 180.0,
+      customerPayable: 219.0,
+      status: 'SCHEDULED_FOR_NEXT_DAY',
+      placedAt: '2026-10-05T20:15:00.000Z',
+      deliveryDate: '2026-10-06',
+      window: '05:00 - 08:00',
+    },
+    {
+      id: 'ord-rur-904',
+      orderNumber: 'QK-RUR-20261005-04',
+      customerName: 'Mahadevappa B.',
+      village: 'Shivalli Extension',
+      items: [
+        { name: 'Sona Masoori Rice (10kg)', qty: 1, vendor: 'Sri Lakshmi Provisions' },
+      ],
+      originalTotal: 650.0,
+      customerPayable: 712.5,
+      status: 'SCHEDULED_FOR_NEXT_DAY',
+      placedAt: '2026-10-05T20:55:00.000Z',
+      deliveryDate: '2026-10-06',
+      window: '05:00 - 08:00',
+    },
+  ];
+
+  const patronFirstNames = ['Anand', 'Basavaraj', 'Chikkanna', 'Devaki', 'Eshwar', 'Gangamma', 'Honnegowda', 'Indiramma', 'Jayanna', 'Kallesh', 'Lakshmana', 'Manjula', 'Nagaraj', 'Parvathamma', 'Ramegowda', 'Siddaraju', 'Thimmegowda', 'Umesh', 'Venkatesh', 'Yashodamma'];
+  const patronLastNames = ['Gowda', 'Patil', 'Shetty', 'Reddy', 'Nayaka', 'Hegde', 'Acharya', 'Babu', 'Prasad', 'Rao'];
+
+  for (let i = 5; i <= 64; i++) {
+    const padNum = String(i).padStart(2, '0');
+    const hamlet = baseHamlets[i % baseHamlets.length];
+    const cName = `${patronFirstNames[i % patronFirstNames.length]} ${patronLastNames[(i * 3) % patronLastNames.length]}`;
+    const it1 = sampleItemsPool[(i * 2) % sampleItemsPool.length];
+    const it2 = sampleItemsPool[(i * 2 + 1) % sampleItemsPool.length];
+    const origTotal = it1.price * 2 + it2.price;
+    const payable = round2(origTotal * 1.05 + 5.0 + 25.0);
+
+    list.push({
+      id: `ord-rur-9${padNum}`,
+      orderNumber: `QK-RUR-20261005-${padNum}`,
+      customerName: cName,
+      village: hamlet,
+      items: [
+        { name: it1.name, qty: 2, vendor: it1.vendor },
+        { name: it2.name, qty: 1, vendor: it2.vendor },
+      ],
+      originalTotal: origTotal,
+      customerPayable: payable,
+      status: 'SCHEDULED_FOR_NEXT_DAY',
+      placedAt: `2026-10-05T${String(17 + Math.floor(i / 20)).padStart(2, '0')}:${String((i * 7) % 60).padStart(2, '0')}:00.000Z`,
+      deliveryDate: '2026-10-06',
+      window: '05:00 - 08:00',
+    });
+  }
+
+  return list;
+}
+
+let memoryBatchOrders = generateRuralBatchOrders();
+
 
 /**
  * POST vendor onboard stub

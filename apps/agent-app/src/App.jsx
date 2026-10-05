@@ -4,7 +4,9 @@ import PrefetchLink from './components/PrefetchLink.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import Skeleton from './components/Skeleton.jsx';
 import OfflineBanner from './components/OfflineBanner.jsx';
+import ToastProvider from './components/Toast.jsx';
 import { isRuralOrderEligible } from './api.js';
+
 
 // React.lazy for instant navigation with zero lag
 const AgentHome = React.lazy(() => import('./pages/AgentHome.jsx'));
@@ -58,8 +60,10 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className="app-viewport">
-        <OfflineBanner />
+      <ToastProvider>
+        <div className="app-viewport">
+          <OfflineBanner />
+
         <div className="agent-shell">
           {/* Desktop Left Sidebar (>= 1024px) */}
           <aside className="desktop-sidebar">
@@ -232,6 +236,7 @@ export default function App() {
           </nav>
         </div>
       </div>
+      </ToastProvider>
     </ErrorBoundary>
   );
 }

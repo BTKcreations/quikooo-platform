@@ -224,6 +224,13 @@ describe('Agent App & Rural Batch Logistics Tests', () => {
       expect(countdown.formatted).toContain('Locked');
     });
 
+    it('formats countdown display with zero-padded two-digit hours, minutes, and seconds or locked string', async () => {
+      const { formatCountdownDisplay } = await import('../src/components/CountdownTimer.jsx');
+      expect(formatCountdownDisplay({ hours: 2, minutes: 5, seconds: 9, isPassed: false })).toBe('02h : 05m : 09s');
+      expect(formatCountdownDisplay({ hours: 0, minutes: 45, seconds: 0, isPassed: false })).toBe('00h : 45m : 00s');
+      expect(formatCountdownDisplay({ isPassed: true })).toBe('00h : 00m : 00s (Cutoff Locked)');
+    });
+
     it('debounce utility coalesces rapid calls within delay window', async () => {
       const { debounce } = await import('../src/api.js');
       let callCount = 0;
@@ -241,4 +248,37 @@ describe('Agent App & Rural Batch Logistics Tests', () => {
       expect(callCount).toBe(1);
     });
   });
+
+  describe('Franchise Earnings Simulator Engine (orders/day × avg → agent 60%)', () => {
+    it('calculates earnings simulator math correctly (orders/day × avg → agent 60%)', async () => {
+      const { calculateEarningsSimulator } = await import('../src/api.js');
+
+      // Canonical 50 orders/day with ₹13.94 avg net margin
+      const sim50 = calculateEarningsSimulator({
+        ordersPerDay: 50,
+        avgContribution: 13.94,
+        days: 30,
+      });
+
+      // Daily pool = 50 * 13.94 = 697.00
+      expect(sim50.dailyPool).toBe(697.0);
+      // Agent 60% = 697.00 * 0.60 = 418.20
+      expect(sim50.dailyAgentEarnings).toBe(418.2);
+      // Quikooo 40% = 697.00 - 418.20 = 278.80
+      expect(sim50.dailyQuikoooShare).toBe(278.8);
+
+      // Monthly pool (30 days) = 1500 orders * 13.94 = 20910.00
+      expect(sim50.monthlyOrders).toBe(1500);
+      expect(sim50.monthlyPool).toBe(20910.0);
+      // Agent 60% = 20910.00 * 0.60 = 12546.00
+      expect(sim50.monthlyAgentEarnings).toBe(12546.0);
+      // Quikooo 40% = 20910.00 - 12546.00 = 8364.00
+      expect(sim50.monthlyQuikoooShare).toBe(8364.0);
+
+      // Exact sum balance check
+      expect(sim50.dailyAgentEarnings + sim50.dailyQuikoooShare).toBe(sim50.dailyPool);
+      expect(sim50.monthlyAgentEarnings + sim50.monthlyQuikoooShare).toBe(sim50.monthlyPool);
+    });
+  });
 });
+
