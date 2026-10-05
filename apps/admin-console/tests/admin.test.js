@@ -13,7 +13,11 @@ import {
   MOCK_AUDIT_LOGS,
   MOCK_SETTLEMENTS,
   processSettlement,
+  paginateData,
+  calculateKpiSum,
 } from '../src/api.js';
+import { paginateData as paginateHelper } from '../src/components/DataTable.jsx';
+import { calculateKpiSum as kpiSumHelper } from '../src/components/KpiCard.jsx';
 
 describe('Admin Console Tests', () => {
   describe('Ledger Reconciliation Engine', () => {
@@ -184,6 +188,80 @@ describe('Admin Console Tests', () => {
       expect(entry.new).toBe('6%');
       expect(entry.time).toBeDefined();
       expect(validateAuditEntry(entry)).toBe(true);
+    });
+  });
+
+  describe('Admin Console UI & UX Helpers', () => {
+    it('table paginate helper correctly slices pages with 20 items per page and handles bounds', () => {
+      // 45 items mock array
+      const items = Array.from({ length: 45 }, (_, i) => ({ id: i + 1, name: `Record ${i + 1}` }));
+
+      // Page 1 (20 items)
+      const page1 = paginateData(items, 1, 20);
+      expect(page1).toHaveLength(20);
+      expect(page1[0].id).toBe(1);
+      expect(page1[19].id).toBe(20);
+
+      // Verify DataTable.jsx export works identically
+      const helperPage1 = paginateHelper(items, 1, 20);
+      expect(helperPage1).toHaveLength(20);
+      expect(helperPage1[0].id).toBe(1);
+
+      // Page 2 (20 items)
+      const page2 = paginateData(items, 2, 20);
+      expect(page2).toHaveLength(20);
+      expect(page2[0].id).toBe(21);
+      expect(page2[19].id).toBe(40);
+
+      // Page 3 (remaining 5 items)
+      const page3 = paginateData(items, 3, 20);
+      expect(page3).toHaveLength(5);
+      expect(page3[0].id).toBe(41);
+      expect(page3[4].id).toBe(45);
+
+      // Page out of bounds
+      const page4 = paginateData(items, 4, 20);
+      expect(page4).toHaveLength(0);
+
+      // Edge cases: empty array and invalid page index
+      expect(paginateData([], 1, 20)).toEqual([]);
+      expect(paginateData(items, 0, 20)).toHaveLength(20);
+    });
+
+    it('KPI sum helper accurately calculates totals without floating point drift', () => {
+      // Canonical financial items
+      const sampleOrders = [
+        { id: 'ord-1', gmv: 135.00, grossMargin: 15.00, agentShare: 8.36, quikoooShare: 5.58 },
+        { id: 'ord-2', gmv: 270.00, grossMargin: 30.00, agentShare: 16.72, quikoooShare: 11.16 },
+        { id: 'ord-3', gmv: 67.50, grossMargin: 7.50, agentShare: 4.18, quikoooShare: 2.79 },
+      ];
+
+      // Sum GMV (135 + 270 + 67.50 = 472.50)
+      const totalGmv = calculateKpiSum(sampleOrders, 'gmv');
+      expect(totalGmv).toBe(472.50);
+
+      // Verify KpiCard.jsx export works identically
+      const helperGmv = kpiSumHelper(sampleOrders, 'gmv');
+      expect(helperGmv).toBe(472.50);
+
+      // Sum Gross Margin (15 + 30 + 7.50 = 52.50)
+      const totalGross = calculateKpiSum(sampleOrders, 'grossMargin');
+      expect(totalGross).toBe(52.50);
+
+      // Sum Agent Share (8.36 + 16.72 + 4.18 = 29.26)
+      const totalAgent = calculateKpiSum(sampleOrders, 'agentShare');
+      expect(totalAgent).toBe(29.26);
+
+      // Sum Quikooo Share (5.58 + 11.16 + 2.79 = 19.53)
+      const totalQuikooo = calculateKpiSum(sampleOrders, 'quikoooShare');
+      expect(totalQuikooo).toBe(19.53);
+
+      // Sum Agent + Quikooo == Total Net (29.26 + 19.53 = 48.79)
+      expect(Math.round((totalAgent + totalQuikooo) * 100) / 100).toBe(48.79);
+
+      // Edge cases: empty array and array of raw numbers
+      expect(calculateKpiSum([])).toBe(0);
+      expect(calculateKpiSum([13.94, 27.88, 8.36])).toBe(50.18);
     });
   });
 });

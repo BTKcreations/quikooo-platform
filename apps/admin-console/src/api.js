@@ -614,3 +614,57 @@ export async function fetchUsers() {
   }
   return [...localUsers];
 }
+
+/**
+ * Pure helper function to paginate an array of items (default 20 per page).
+ */
+export function paginateData(items = [], page = 1, pageSize = 20) {
+  if (!Array.isArray(items) || items.length === 0) return [];
+  const safePage = Math.max(1, parseInt(page, 10) || 1);
+  const size = Math.max(1, parseInt(pageSize, 10) || 20);
+  const startIndex = (safePage - 1) * size;
+  return items.slice(startIndex, startIndex + size);
+}
+
+/**
+ * Pure helper returning full pagination metadata and sliced items.
+ */
+export function paginateTable(items = [], page = 1, pageSize = 20) {
+  const totalItems = Array.isArray(items) ? items.length : 0;
+  const size = Math.max(1, parseInt(pageSize, 10) || 20);
+  const totalPages = Math.max(1, Math.ceil(totalItems / size));
+  const safePage = Math.min(Math.max(1, parseInt(page, 10) || 1), totalPages);
+  const startIndex = (safePage - 1) * size;
+  const pagedItems = Array.isArray(items) ? items.slice(startIndex, startIndex + size) : [];
+
+  return {
+    items: pagedItems,
+    page: safePage,
+    pageSize: size,
+    totalPages,
+    totalItems,
+    startIndex,
+    endIndex: Math.min(startIndex + size, totalItems),
+  };
+}
+
+/**
+ * Calculates sum of a specified numeric field across an array of items,
+ * rounded to 2 decimal places.
+ */
+export function calculateKpiSum(items = [], key) {
+  if (!Array.isArray(items) || items.length === 0) return 0;
+  const total = items.reduce((acc, item) => {
+    let val;
+    if (typeof item === 'object' && item !== null) {
+      val = key ? item[key] : (item.amount ?? item.value ?? item.total ?? 0);
+    } else {
+      val = item;
+    }
+    const num = Number(val);
+    return acc + (isNaN(num) ? 0 : num);
+  }, 0);
+  return Math.round((total + Number.EPSILON) * 100) / 100;
+}
+
+export const sumKpi = calculateKpiSum;

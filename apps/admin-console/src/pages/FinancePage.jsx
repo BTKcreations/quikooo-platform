@@ -1,42 +1,281 @@
-import React, { useState, useEffect } from 'react';
-import { fetchLedgerEntries, calculateOrderLedger, reconcileLedger } from '../api';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  fetchLedgerEntries,
+  calculateOrderLedger,
+  reconcileLedger,
+  fetchSettlements,
+  processSettlement,
+} from '../api';
+import KpiCard from '../components/KpiCard.jsx';
+import DataTable from '../components/DataTable.jsx';
+import OfflineBanner from '../components/OfflineBanner.jsx';
+import { Skeleton, SkeletonCard } from '../components/Skeleton.jsx';
+import EmptyState from '../components/EmptyState.jsx';
+import { useToast } from '../components/Toast.jsx';
 
 export default function FinancePage() {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [simulatedPrice, setSimulatedPrice] = useState(100);
   const [activeLedger, setActiveLedger] = useState(null);
+  const [settlements, setSettlements] = useState([]);
+  const [settlementsLoading, setSettlementsLoading] = useState(true);
+  const [processingId, setProcessingId] = useState(null);
+
+  const { showToast } = useToast();
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setSettlementsLoading(true);
+
+    try {
+      const [ledgerData, settlementData] = await Promise.all([
+        fetchLedgerEntries(),
+        fetchSettlements(),
+      ]);
+      setEntries(ledgerData);
+      if (ledgerData.length > 0) {
+        setActiveLedger(ledgerData[0]);
+      }
+      setSettlements(settlementData);
+    } catch {
+      showToast('Error loading financial data. Using offline cached mode.', 'error');
+    } finally {
+      setLoading(false);
+      setSettlementsLoading(false);
+    }
+  }, [showToast]);
 
   useEffect(() => {
-    fetchLedgerEntries().then((data) => {
-      setEntries(data);
-      if (data.length > 0) {
-        setActiveLedger(data[0]);
-      }
-      setLoading(false);
-    });
-  }, []);
+    loadData();
+  }, [loadData]);
 
   const handleSimulate = (price) => {
+    const numPrice = Number(price);
     setSimulatedPrice(price);
     const newBreakdown = calculateOrderLedger({
-      originalPrice: Number(price),
-      orderId: `ord-sim-${price}`,
-      orderNumber: `QK-SIM-${Math.round(price)}`,
+      originalPrice: numPrice,
+      orderId: `ord-sim-${Math.round(numPrice)}`,
+      orderNumber: `QK-SIM-${Math.round(numPrice)}`,
     });
     setActiveLedger(newBreakdown);
   };
 
+  const handleApproveSettlement = async (settlementId) => {
+    setProcessingId(settlementId);
+    try {
+      const bankRef = `UTR-${Date.now().toString().slice(-6)}`;
+      const updated = await processSettlement(settlementId, bankRef);
+      showToast(`Settlement ${updated.id} approved! Disbursed ₹${updated.netPayout.toFixed(2)} (${updated.transactionRef})`, 'success');
+      // Refresh settlements
+      const data = await fetchSettlements();
+      setSettlements(data);
+    } catch (err) {
+      showToast(err.message || 'Settlement approval failed', 'error');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
   const recon = activeLedger ? reconcileLedger(activeLedger) : null;
+
+  // Double-entry table columns
+  const ledgerColumns = [
+    {
+      key: 'account',
+      label: 'Account Code',
+      sortable: true,
+      width: '260px',
+      render: (row) => (
+        <div>
+          <code style={{ fontWeight: 600, color: 'var(--color-brand-dark, #064E3B)' }}>{row.account}</code>
+          {row.description && (
+            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{row.description}</div>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'type',
+      label: 'Type',
+      sortable: true,
+      width: '100px',
+      render: (row) => (
+        <span className={`status-pill ${row.type === 'DEBIT' ? 'warning' : 'success'}`}>
+          {row.type}
+        </span>
+      ),
+    },
+    {
+      key: 'debit',
+      label: 'Debit (INR)',
+      sortable: true,
+      align: 'right',
+      filterValue: (row) => (row.type === 'DEBIT' ? String(row.amount) : ''),
+      render: (row) =>
+        row.type === 'DEBIT' ? (
+          <strong style={{ color: '#111827' }}>₹{Number(row.amount).toFixed(2)}</strong>
+        ) : (
+          <span style={{ color: '#9CA3AF' }}>-</span>
+        ),
+    },
+    {
+      key: 'credit',
+      label: 'Credit (INR)',
+      sortable: true,
+      align: 'right',
+      filterValue: (row) => (row.type === 'CREDIT' ? String(row.amount) : ''),
+      render: (row) =>
+        row.type === 'CREDIT' ? (
+          <strong style={{ color: '#047857' }}>₹{Number(row.amount).toFixed(2)}</strong>
+        ) : (
+          <span style={{ color: '#9CA3AF' }}>-</span>
+        ),
+    },
+    {
+      key: 'notes',
+      label: 'Audit & Description',
+      sortable: false,
+      render: (row) => {
+        let note = row.description || '';
+        if (row.account === 'ESCROW_CUSTOMER_RECEIVABLE') note = 'Customer gross payment received at gateway';
+        if (row.account === 'VENDOR_PAYABLE') note = `Merchant net credit (Base ₹${activeLedger.originalPrice.toFixed(2)} - 10% comm ₹${activeLedger.commission.toFixed(2)})`;
+        if (row.account === 'DELIVERY_PARTNER_PAYABLE') note = 'Driver fee pass-through credit (100% of ₹25)';
+        if (row.account === 'TAX_PAYABLE') note = 'Statutory GST liability on platform revenue (18%)';
+        if (row.account === 'AGENT_COMMISSION_PAYABLE') note = `Agent 60% franchise revenue share of net pool (₹${activeLedger.netAmount.toFixed(2)})`;
+        if (row.account === 'QUIKOOO_PLATFORM_REVENUE') note = `Quikooo 40% corporate retained share of net pool (₹${activeLedger.netAmount.toFixed(2)})`;
+        return <span style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>{note}</span>;
+      },
+    },
+  ];
+
+  // Ledger entries enriched with debit/credit numeric fields for sorting
+  const ledgerTableRows = activeLedger
+    ? activeLedger.entries.map((entry, index) => ({
+        ...entry,
+        id: `entry-${index}-${entry.account}`,
+        debit: entry.type === 'DEBIT' ? Number(entry.amount) : 0,
+        credit: entry.type === 'CREDIT' ? Number(entry.amount) : 0,
+      }))
+    : [];
+
+  // Settlement DataTable columns
+  const settlementColumns = [
+    {
+      key: 'id',
+      label: 'Settlement ID',
+      sortable: true,
+      render: (row) => (
+        <div>
+          <strong>{row.id}</strong>
+          <div style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)' }}>
+            <code>{row.idempotentKey}</code>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'settlementType',
+      label: 'Type',
+      sortable: true,
+      render: (row) => (
+        <span
+          className={`status-pill ${
+            row.settlementType === 'VENDOR' ? 'primary' : row.settlementType === 'AGENT' ? 'success' : 'neutral'
+          }`}
+        >
+          {row.settlementType}
+        </span>
+      ),
+    },
+    {
+      key: 'recipientName',
+      label: 'Recipient',
+      sortable: true,
+      render: (row) => (
+        <div>
+          <strong>{row.recipientName}</strong>
+          <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>{row.zoneName || 'All Zones'}</div>
+        </div>
+      ),
+    },
+    {
+      key: 'netPayout',
+      label: 'Net Payout',
+      sortable: true,
+      align: 'right',
+      render: (row) => (
+        <strong
+          style={{
+            fontSize: '0.95rem',
+            color: row.settlementType === 'VENDOR' && row.netPayout === 90 ? '#047857' : '#111827',
+          }}
+        >
+          ₹{row.netPayout.toFixed(2)}
+        </strong>
+      ),
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      sortable: true,
+      render: (row) => (
+        <span className={`status-pill ${row.status === 'PAID' ? 'success' : 'warning'}`}>
+          {row.status}
+        </span>
+      ),
+    },
+    {
+      key: 'transactionRef',
+      label: 'Bank Reference',
+      sortable: true,
+      render: (row) =>
+        row.transactionRef ? (
+          <code style={{ fontSize: '0.8rem' }}>{row.transactionRef}</code>
+        ) : (
+          <span style={{ color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>Pending</span>
+        ),
+    },
+    {
+      key: 'actions',
+      label: 'Disbursement Action',
+      sortable: false,
+      align: 'center',
+      render: (row) =>
+        row.status === 'PENDING' ? (
+          <button
+            type="button"
+            className="btn-primary btn-sm"
+            onClick={() => handleApproveSettlement(row.id)}
+            disabled={processingId === row.id}
+            style={{
+              padding: '0.4rem 0.85rem',
+              fontWeight: 600,
+              boxShadow: '0 1px 3px rgba(5, 150, 105, 0.2)',
+            }}
+          >
+            {processingId === row.id ? 'Approving...' : '✓ Approve & Disburse'}
+          </button>
+        ) : (
+          <span className="status-pill success" style={{ fontSize: '0.75rem' }}>
+            ✓ Paid Locked
+          </span>
+        ),
+    },
+  ];
 
   return (
     <div className="page-container">
+      <OfflineBanner />
+
       <div className="page-header">
         <div>
           <h1 className="page-title">Double-Entry Financial Ledger</h1>
-          <p className="page-subtitle">Platform revenue accounting, tax withholding, and 60/40 franchise reconciliation</p>
+          <p className="page-subtitle">
+            Platform revenue accounting, tax withholding, and 60/40 franchise reconciliation
+          </p>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
           <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text-secondary)' }}>
             Simulate Original Food Price: ₹
           </label>
@@ -50,7 +289,7 @@ export default function FinancePage() {
             value={simulatedPrice}
             onChange={(e) => handleSimulate(e.target.value)}
           />
-          <button className="btn-outline btn-sm" onClick={() => handleSimulate(100)}>
+          <button type="button" className="btn-outline btn-sm" onClick={() => handleSimulate(100)}>
             Reset Canonical ₹100
           </button>
         </div>
@@ -73,157 +312,125 @@ export default function FinancePage() {
         </div>
       )}
 
-      {/* Canonical Breakdown Cards */}
-      {activeLedger && (
+      {/* KPI Cards: GMV, gross 15/order, net 13.94, agent 8.36/quikooo 5.58 */}
+      {loading ? (
         <div className="kpi-grid">
-          <div className="kpi-card">
-            <div className="kpi-label">Order 100 Baseline</div>
-            <div className="kpi-value">₹{activeLedger.originalPrice.toFixed(2)}</div>
-            <div className="kpi-subtext">Original food listing price</div>
-          </div>
-
-          <div className="kpi-card">
-            <div className="kpi-label">Commission (10%)</div>
-            <div className="kpi-value" style={{ color: '#059669' }}>
-              ₹{activeLedger.commission.toFixed(2)}
-            </div>
-            <div className="kpi-subtext">Charged strictly on original price</div>
-          </div>
-
-          <div className="kpi-card">
-            <div className="kpi-label">Platform Fee</div>
-            <div className="kpi-value">₹{activeLedger.platformFee.toFixed(2)}</div>
-            <div className="kpi-subtext">Fixed customer fee</div>
-          </div>
-
-          <div className="kpi-card">
-            <div className="kpi-label">Quikooo Gross Margin</div>
-            <div className="kpi-value" style={{ color: '#1E40AF' }}>
-              ₹{activeLedger.grossRevenue.toFixed(2)}
-            </div>
-            <div className="kpi-subtext">5% markup (₹{activeLedger.menuMarkup.toFixed(2)}) + 10% comm (₹{activeLedger.commission.toFixed(2)}) = ₹15.00</div>
-          </div>
-
-          <div className="kpi-card">
-            <div className="kpi-label">GST Liability (18%)</div>
-            <div className="kpi-value" style={{ color: '#D97706' }}>
-              ₹{activeLedger.taxAmount.toFixed(2)}
-            </div>
-            <div className="kpi-subtext">Statutory tax deducted before split</div>
-          </div>
-
-          <div className="kpi-card">
-            <div className="kpi-label">Net Adjusted Pool</div>
-            <div className="kpi-value" style={{ color: '#047857' }}>
-              ₹{activeLedger.netAmount.toFixed(2)}
-            </div>
-            <div className="kpi-subtext">Gross Margin less GST</div>
-          </div>
-
-          <div className="kpi-card">
-            <div className="kpi-label">Agent 60% Share</div>
-            <div className="kpi-value" style={{ color: '#059669' }}>
-              ₹{activeLedger.agentShare.toFixed(2)}
-            </div>
-            <div className="kpi-subtext">Franchise zone revenue</div>
-          </div>
-
-          <div className="kpi-card">
-            <div className="kpi-label">Quikooo 40% Share</div>
-            <div className="kpi-value" style={{ color: '#0284C7' }}>
-              ₹{activeLedger.quikoooShare.toFixed(2)}
-            </div>
-            <div className="kpi-subtext">Corporate retained margin</div>
-          </div>
-
-          <div className="kpi-card">
-            <div className="kpi-label">Delivery Fee / Payout</div>
-            <div className="kpi-value">
-              ₹{activeLedger.deliveryFee.toFixed(2)} / ₹{activeLedger.deliveryPayout.toFixed(2)}
-            </div>
-            <div className="kpi-subtext" style={{ color: '#059669' }}>
-              100% Pass-Through (₹25 inflow = ₹25 driver)
-            </div>
-          </div>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
         </div>
+      ) : activeLedger ? (
+        <div className="kpi-grid">
+          <KpiCard
+            label="Gross Merchandise Value (GMV)"
+            value={`₹${activeLedger.customerPayable.toFixed(2)}`}
+            subtext={`Original ₹${activeLedger.originalPrice.toFixed(2)} + Markup ₹${activeLedger.menuMarkup.toFixed(2)} + Delivery ₹${activeLedger.deliveryFee.toFixed(2)}`}
+            color="var(--color-brand-primary, #059669)"
+            icon="💳"
+          />
+
+          <KpiCard
+            label="Quikooo Gross Margin"
+            value={`₹${activeLedger.grossRevenue.toFixed(2)}`}
+            subtext="₹15.00 gross / order (5% markup + 10% comm)"
+            color="#1E40AF"
+            icon="📈"
+            badge="₹15 / Order"
+          />
+
+          <KpiCard
+            label="Net Adjusted Pool"
+            value={`₹${activeLedger.netAmount.toFixed(2)}`}
+            subtext={`Gross ₹${activeLedger.grossRevenue.toFixed(2)} less 18% GST (₹${activeLedger.taxAmount.toFixed(2)})`}
+            color="#047857"
+            icon="⚖️"
+            badge="Net ₹13.94"
+          />
+
+          <KpiCard
+            label="Agent Franchise Share (60%)"
+            value={`₹${activeLedger.agentShare.toFixed(2)}`}
+            subtext="Franchise zone commission allocation"
+            color="#059669"
+            icon="🤝"
+            badge="Agent ₹8.36"
+          />
+
+          <KpiCard
+            label="Quikooo Corporate Share (40%)"
+            value={`₹${activeLedger.quikoooShare.toFixed(2)}`}
+            subtext="HQ retained margin post statutory GST"
+            color="#0284C7"
+            icon="🏢"
+            badge="Quikooo ₹5.58"
+          />
+
+          <KpiCard
+            label="Delivery Pass-Through"
+            value={`₹${activeLedger.deliveryFee.toFixed(2)} / ₹${activeLedger.deliveryPayout.toFixed(2)}`}
+            subtext="100% pass-through (₹25 customer = ₹25 driver)"
+            color="#4B5563"
+            icon="🛵"
+          />
+        </div>
+      ) : (
+        <EmptyState
+          icon="📊"
+          title="No Ledger Data"
+          description="Could not calculate financial breakdown."
+        />
       )}
 
-      {/* Double-Entry Journal Table */}
+      {/* Double-Entry Journal DataTable with Filters */}
       <div className="admin-card">
-        <h2 className="card-title">
-          <span>Double-Entry Ledger Journal: Order {activeLedger?.orderNumber || 'QK-20261005-0100'}</span>
-          <span style={{ fontSize: '0.8rem', fontWeight: 400, color: 'var(--color-text-secondary)' }}>
-            Customer Payable: <strong>₹{activeLedger?.customerPayable.toFixed(2)}</strong> | Vendor Settlement: <strong style={{ color: '#047857' }}>₹{activeLedger?.vendorSettlement.toFixed(2)}</strong>
-          </span>
-        </h2>
+        <DataTable
+          title={`Double-Entry Ledger Journal: Order ${activeLedger?.orderNumber || 'QK-20261005-0100'}`}
+          subtitle={`Customer Payable: ₹${activeLedger?.customerPayable.toFixed(2)} | Vendor Net Settlement: ₹${activeLedger?.vendorSettlement.toFixed(2)}`}
+          columns={ledgerColumns}
+          data={ledgerTableRows}
+          pageSize={20}
+          stickyHeader={true}
+          searchPlaceholder="Filter accounts, debit, credit, or notes..."
+          loading={loading}
+          footer={
+            <tr style={{ backgroundColor: '#F9FAFB', fontWeight: 700 }}>
+              <td colSpan="2">TOTAL DOUBLE-ENTRY RECONCILIATION</td>
+              <td style={{ textAlign: 'right' }}>₹{recon?.totalDebits.toFixed(2)}</td>
+              <td style={{ textAlign: 'right', color: '#047857' }}>₹{recon?.totalCredits.toFixed(2)}</td>
+              <td>
+                {recon?.isBalanced ? (
+                  <span style={{ color: '#047857' }}>✓ Perfectly Balanced (Debit == Credit)</span>
+                ) : (
+                  <span style={{ color: '#DC2626' }}>⚠ Imbalance detected</span>
+                )}
+              </td>
+            </tr>
+          }
+        />
+      </div>
 
-        {loading ? (
-          <p>Loading journal entries...</p>
-        ) : (
-          <div className="table-responsive">
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>Account Name</th>
-                  <th>Entry Type</th>
-                  <th>Debit (INR)</th>
-                  <th>Credit (INR)</th>
-                  <th>Description & Audit Note</th>
-                </tr>
-              </thead>
-              <tbody>
-                {activeLedger?.entries.map((entry, index) => (
-                  <tr key={index}>
-                    <td>
-                      <code>{entry.account}</code>
-                    </td>
-                    <td>
-                      <span className={`status-pill ${entry.type === 'DEBIT' ? 'warning' : 'success'}`}>
-                        {entry.type}
-                      </span>
-                    </td>
-                    <td>
-                      {entry.type === 'DEBIT' ? (
-                        <strong>₹{Number(entry.amount).toFixed(2)}</strong>
-                      ) : (
-                        '-'
-                      )}
-                    </td>
-                    <td>
-                      {entry.type === 'CREDIT' ? (
-                        <strong style={{ color: '#047857' }}>₹{Number(entry.amount).toFixed(2)}</strong>
-                      ) : (
-                        '-'
-                      )}
-                    </td>
-                    <td style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>
-                      {entry.account === 'ESCROW_CUSTOMER_RECEIVABLE' && 'Customer gross payment received at gateway'}
-                      {entry.account === 'VENDOR_PAYABLE' && `Merchant net credit (Original ₹${activeLedger.originalPrice.toFixed(2)} - 10% commission ₹${activeLedger.commission.toFixed(2)})`}
-                      {entry.account === 'DELIVERY_PARTNER_PAYABLE' && 'Driver fee pass-through credit (100% of ₹25)'}
-                      {entry.account === 'TAX_PAYABLE' && 'Statutory GST liability on platform revenue (18%)'}
-                      {entry.account === 'AGENT_COMMISSION_PAYABLE' && `Agent 60% franchise revenue share of net pool (₹${activeLedger.netAmount.toFixed(2)})`}
-                      {entry.account === 'QUIKOOO_PLATFORM_REVENUE' && `Quikooo 40% corporate retained share of net pool (₹${activeLedger.netAmount.toFixed(2)})`}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr style={{ backgroundColor: '#F9FAFB', fontWeight: 700 }}>
-                  <td colSpan="2">TOTAL RECONCILIATION</td>
-                  <td>₹{recon?.totalDebits.toFixed(2)}</td>
-                  <td style={{ color: '#047857' }}>₹{recon?.totalCredits.toFixed(2)}</td>
-                  <td>
-                    {recon?.isBalanced ? (
-                      <span style={{ color: '#047857' }}>✓ Perfectly Balanced (Debit == Credit)</span>
-                    ) : (
-                      <span style={{ color: '#DC2626' }}>⚠ Imbalance detected</span>
-                    )}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
+      {/* Settlement Approval Section */}
+      <div className="admin-card">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <div>
+            <h2 className="card-title" style={{ margin: 0 }}>
+              Settlement Approval Queue & Direct Disbursements
+            </h2>
+            <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>
+              Idempotent payout execution: Vendor (₹90 baseline), Agent (₹8.36 baseline), and Driver (₹25 × n)
+            </p>
           </div>
-        )}
+        </div>
+
+        <DataTable
+          columns={settlementColumns}
+          data={settlements}
+          pageSize={20}
+          stickyHeader={true}
+          searchPlaceholder="Filter settlements by recipient, ID, type..."
+          loading={settlementsLoading}
+          emptyMessage="No pending or processed settlements found."
+        />
       </div>
     </div>
   );
