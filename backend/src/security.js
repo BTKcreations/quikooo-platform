@@ -41,6 +41,12 @@ const ALLOWED_ORIGINS = [
   'https://admin.quikooo.com',
   'https://merchant.quikooo.com',
   'https://agent.quikooo.com',
+  'https://quikooo.bstk.in',
+  'https://merchant.quikooo.bstk.in',
+  'https://driver.quikooo.bstk.in',
+  'https://agent.quikooo.bstk.in',
+  'https://admin.quikooo.bstk.in',
+  'https://api.quikooo.bstk.in',
 ];
 
 const corsOptions = {

@@ -61,7 +61,12 @@ async function runMigrations(customPool = null) {
       console.warn('[Migrate Notice] Geometric calculations will fall back to Haversine trigonometry.');
     }
 
-    // 2. Discover and sort migration files
+    // 2b. Migration tracking table (idempotent re-runs)
+    await client.query(
+      'CREATE TABLE IF NOT EXISTS schema_migrations (filename TEXT PRIMARY KEY, applied_at TIMESTAMPTZ DEFAULT NOW())'
+    );
+    const appliedRes = await client.query('SELECT filename FROM schema_migrations');
+    const applied = new Set(appliedRes.rows.map((r) => r.filename));
     if (!fs.existsSync(migrationsDir)) {
       throw new Error(`Migrations directory not found at: ${migrationsDir}`);
     }
@@ -80,16 +85,23 @@ async function runMigrations(customPool = null) {
 
     console.log(`[Migrate] Found ${files.length} migration file(s) to execute.`);
 
-    // 3. Run each migration file in sequence
+    // 3. Run each pending migration file in sequence
+    let ran = 0;
     for (const file of files) {
+      if (applied.has(file)) {
+        console.log(`[Migrate] ⏭️  Skipping already-applied: ${file}`);
+        continue;
+      }
       const filePath = path.join(migrationsDir, file);
       const sql = fs.readFileSync(filePath, 'utf8');
 
       console.log(`[Migrate] ⚙️  Applying: ${file}...`);
       const startTime = Date.now();
       await client.query(sql);
+      await client.query('INSERT INTO schema_migrations (filename) VALUES ($1)', [file]);
       const duration = Date.now() - startTime;
       console.log(`[Migrate] ✅ Successfully applied: ${file} (${duration}ms)`);
+      ran += 1;
     }
 
     client.release();
