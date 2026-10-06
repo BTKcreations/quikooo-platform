@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   calculateOrderLedger,
   calculateRevenueSplit,
@@ -303,4 +303,104 @@ describe('Admin Console Tests', () => {
       expect(formatSortParam({ key: null })).toBe('');
     });
   });
+
+  describe('Authentication & Protected API Handling', () => {
+    let mockStorage = {};
+    const originalFetch = global.fetch;
+    const originalWindow = global.window;
+    const originalLocalStorage = global.localStorage;
+
+    beforeEach(() => {
+      mockStorage = {};
+      global.localStorage = {
+        getItem: vi.fn((key) => mockStorage[key] || null),
+        setItem: vi.fn((key, val) => {
+          mockStorage[key] = String(val);
+        }),
+        removeItem: vi.fn((key) => {
+          delete mockStorage[key];
+        }),
+        clear: vi.fn(() => {
+          mockStorage = {};
+        }),
+      };
+      global.window = {
+        localStorage: global.localStorage,
+        location: {
+          pathname: '/admin/overview',
+          href: '/admin/overview',
+        },
+        dispatchEvent: vi.fn(),
+      };
+    });
+
+    afterEach(() => {
+      global.fetch = originalFetch;
+      global.window = originalWindow;
+      global.localStorage = originalLocalStorage;
+    });
+
+    it('auth header attached when token stored', async () => {
+      const mockToken = 'jwt-token-admin-12345';
+      global.localStorage.setItem(
+        'quikooo_admin_auth',
+        JSON.stringify({
+          token: mockToken,
+          user: { id: 'usr-1', email: 'admin@quikooo.com', role: 'SUPER_ADMIN' },
+        })
+      );
+
+      let capturedOptions = null;
+      global.fetch = vi.fn().mockImplementation((url, options) => {
+        capturedOptions = options;
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, data: { logs: [] } }),
+        });
+      });
+
+      await fetchAuditLogs();
+
+      expect(global.fetch).toHaveBeenCalledWith('/api/v1/admin/audit-logs', expect.anything());
+      expect(capturedOptions).toBeDefined();
+      expect(capturedOptions.headers).toBeDefined();
+      expect(capturedOptions.headers.Authorization).toBe(`Bearer ${mockToken}`);
+    });
+
+    it('401 clears auth and triggers redirect to /admin/login', async () => {
+      global.localStorage.setItem(
+        'quikooo_admin_auth',
+        JSON.stringify({
+          token: 'expired-token',
+          user: { id: 'usr-1', role: 'SUPER_ADMIN' },
+        })
+      );
+
+      let redirectedHref = null;
+      global.window.location = {
+        pathname: '/admin/audit',
+        get href() {
+          return redirectedHref || '/admin/audit';
+        },
+        set href(val) {
+          redirectedHref = val;
+        },
+      };
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        json: async () => ({ success: false, message: 'Authentication required' }),
+      });
+
+      await expect(fetchAuditLogs()).rejects.toThrow();
+
+      // Auth must be cleared from storage
+      expect(global.localStorage.getItem('quikooo_admin_auth')).toBeNull();
+      // Redirect must be triggered to /admin/login
+      expect(redirectedHref).toBe('/admin/login');
+    });
+  });
 });
+

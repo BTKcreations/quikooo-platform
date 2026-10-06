@@ -1,9 +1,11 @@
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense, lazy, useState, useEffect } from 'react';
 import { Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import PrefetchLink from './components/PrefetchLink.jsx';
 import { ToastProvider } from './components/Toast.jsx';
 import { SkeletonPage } from './components/Skeleton.jsx';
 import CommandPalette from './components/CommandPalette.jsx';
+import LoginPage from './pages/LoginPage.jsx';
+import { getToken, getUser, logout } from './lib/auth.js';
 
 // Dynamic Page Lazy Loading for Performance
 const Overview = lazy(() => import('./pages/Overview.jsx'));
@@ -23,6 +25,40 @@ const prefetchAudit = () => import('./pages/AuditPage.jsx');
 
 export default function App() {
   const location = useLocation();
+  const [token, setToken] = useState(() => getToken());
+  const [user, setUser] = useState(() => getUser());
+
+  useEffect(() => {
+    const handleAuthChange = () => {
+      setToken(getToken());
+      setUser(getUser());
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('quikooo:auth-changed', handleAuthChange);
+      window.addEventListener('storage', handleAuthChange);
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('quikooo:auth-changed', handleAuthChange);
+        window.removeEventListener('storage', handleAuthChange);
+      }
+    };
+  }, []);
+
+  const handleLogout = () => {
+    logout();
+    setToken(null);
+    setUser(null);
+  };
+
+  // If no active session, render Login Gate (all admin routes protected)
+  if (!token) {
+    return (
+      <ToastProvider>
+        <LoginPage onLoginSuccess={() => { setToken(getToken()); setUser(getUser()); }} />
+      </ToastProvider>
+    );
+  }
 
   const isCurrent = (path) => {
     if (path === '/admin/overview') {
@@ -113,8 +149,29 @@ export default function App() {
                 <span>Nominal (Port 3004)</span>
               </span>
               <span style={{ fontSize: '0.8rem', opacity: 0.9 }}>
-                Super Admin
+                {user?.fullName || user?.email || 'Super Admin'}
               </span>
+              <button
+                type="button"
+                onClick={handleLogout}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.18)',
+                  border: '1px solid rgba(255, 255, 255, 0.3)',
+                  color: '#FFFFFF',
+                  borderRadius: '6px',
+                  padding: '0.25rem 0.65rem',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.3rem',
+                }}
+                aria-label="Sign out"
+              >
+                <span>🚪</span>
+                <span>Sign Out</span>
+              </button>
             </div>
           </header>
 
@@ -179,6 +236,29 @@ export default function App() {
               ))}
 
               <div style={{ marginTop: 'auto', paddingTop: '1rem', borderTop: '1px solid var(--color-surface-subtle, #F3F4F0)' }}>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  style={{
+                    width: '100%',
+                    padding: '0.45rem 0.75rem',
+                    marginBottom: '0.75rem',
+                    background: '#FEF2F2',
+                    border: '1px solid #FECACA',
+                    borderRadius: '0.5rem',
+                    color: '#B91C1C',
+                    fontSize: '0.8rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.4rem',
+                  }}
+                >
+                  <span>🚪</span>
+                  <span>Sign Out</span>
+                </button>
                 <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
                   Quikooo Core v1.0.0<br />
                   Tier-2/3 Hyperlocal System
@@ -190,15 +270,16 @@ export default function App() {
             <main className="admin-main-content">
               <Suspense fallback={<SkeletonPage />}>
                 <Routes>
-                  <Route path="/" element={<Navigate to="/admin" replace />} />
-                  <Route path="/admin" element={<Overview />} />
+                  <Route path="/" element={<Navigate to="/admin/overview" replace />} />
+                  <Route path="/admin" element={<Navigate to="/admin/overview" replace />} />
+                  <Route path="/admin/login" element={<Navigate to="/admin/overview" replace />} />
                   <Route path="/admin/overview" element={<Overview />} />
                   <Route path="/admin/zones" element={<ZonesPage />} />
                   <Route path="/admin/finance" element={<FinancePage />} />
                   <Route path="/admin/settlements" element={<SettlementsPage />} />
                   <Route path="/admin/users" element={<UsersPage />} />
                   <Route path="/admin/audit" element={<AuditPage />} />
-                  <Route path="*" element={<Navigate to="/admin" replace />} />
+                  <Route path="*" element={<Navigate to="/admin/overview" replace />} />
                 </Routes>
               </Suspense>
             </main>

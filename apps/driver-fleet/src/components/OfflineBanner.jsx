@@ -34,10 +34,12 @@ export default function OfflineBanner({ heartbeatIntervalMs = 15000 }) {
     const interval = setInterval(async () => {
       if (navigator.onLine) {
         try {
-          const res = await fetch('/api/health', { method: 'HEAD', cache: 'no-store' });
-          if (!isOnline && res.ok) {
+          const res = await fetch('/api/v1/health', { method: 'GET', cache: 'no-store' });
+          // Any HTTP response (even 401/404) proves the server is reachable.
+          if (!isOnline) {
             handleOnline();
           }
+          void res;
         } catch {
           // Keep non-blocking
         }

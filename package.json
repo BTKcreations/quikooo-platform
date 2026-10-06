@@ -34,7 +34,8 @@
     "dev:agent": "npm run dev --workspace=agent-app",
     "dev:admin": "npm run dev --workspace=admin-console",
     "db:migrate": "npm run db:migrate --workspace=backend",
-    "db:seed": "npm run db:seed --workspace=backend"
+    "db:seed": "npm run db:seed --workspace=backend",
+    "admin:create": "npm run admin:create --workspace=backend --"
   },
   "keywords": [
     "hyperlocal",

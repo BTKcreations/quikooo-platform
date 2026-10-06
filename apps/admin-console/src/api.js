@@ -1,7 +1,5 @@
-/**
- * Quikooo Admin Console - Central API Client & Business Logic Engine
- * Includes tolerant fallbacks, canonical financial calculations, and reconciliation validators.
- */
+import { authHeaders, logout, getToken, login, getStoredAuth, isAuthenticated } from './lib/auth.js';
+export { authHeaders, logout, getToken, login, getStoredAuth, isAuthenticated };
 
 export const AGENT_SHARE_PERCENT = 60;
 export const QUIKOOO_SHARE_PERCENT = 40;
@@ -428,12 +426,45 @@ export function notifyToast(message, type = 'error') {
 }
 
 // -------------------------------------------------------------
-// API Request Methods: Real Backend Endpoints, No Silent Mock Fallback
+// Authenticated API Request Methods
 // -------------------------------------------------------------
+
+/**
+ * Attaches Authorization Bearer on every fetch;
+ * On 401: clears auth and redirects to /admin/login (window.location) without surfacing raw errors.
+ */
+export async function adminFetch(url, options = {}) {
+  const headers = authHeaders(options.headers || {});
+  const res = await fetch(url, {
+    ...options,
+    headers,
+  });
+
+  if (res.status === 401) {
+    logout();
+    if (typeof window !== 'undefined' && window.location) {
+      try {
+        if (window.location.pathname !== '/admin/login') {
+          window.location.href = '/admin/login';
+        }
+      } catch {
+        try {
+          window.location = '/admin/login';
+        } catch {}
+      }
+    }
+    const err = new Error('Unauthorized');
+    err.status = 401;
+    err.isAuthError = true;
+    throw err;
+  }
+
+  return res;
+}
 
 export async function fetchOverviewKPIs() {
   try {
-    const res = await fetch('/api/v1/reports/overview');
+    const res = await adminFetch('/api/v1/reports/overview');
     if (!res.ok) {
       const errJson = await res.json().catch(() => ({}));
       throw new Error(errJson.message || `Failed to fetch overview KPIs (HTTP ${res.status})`);
@@ -441,6 +472,7 @@ export async function fetchOverviewKPIs() {
     const json = await res.json();
     return json.data;
   } catch (err) {
+    if (err?.status === 401 || err?.isAuthError) throw err;
     notifyToast(err.message, 'error');
     throw err;
   }
@@ -448,7 +480,7 @@ export async function fetchOverviewKPIs() {
 
 export async function fetchZones() {
   try {
-    const res = await fetch('/api/v1/zones');
+    const res = await adminFetch('/api/v1/zones');
     if (!res.ok) {
       const errJson = await res.json().catch(() => ({}));
       throw new Error(errJson.message || `Failed to fetch zones (HTTP ${res.status})`);
@@ -456,6 +488,7 @@ export async function fetchZones() {
     const json = await res.json();
     return json.data?.zones || json.data || [];
   } catch (err) {
+    if (err?.status === 401 || err?.isAuthError) throw err;
     notifyToast(err.message, 'error');
     throw err;
   }
@@ -466,7 +499,7 @@ export async function saveZone(zoneData) {
   const url = isEdit ? `/api/v1/zones/${zoneData.id}` : '/api/v1/zones';
   const method = isEdit ? 'PUT' : 'POST';
   try {
-    const res = await fetch(url, {
+    const res = await adminFetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(zoneData),
@@ -478,6 +511,7 @@ export async function saveZone(zoneData) {
     const json = await res.json();
     return json.data;
   } catch (err) {
+    if (err?.status === 401 || err?.isAuthError) throw err;
     notifyToast(err.message, 'error');
     throw err;
   }
@@ -485,7 +519,7 @@ export async function saveZone(zoneData) {
 
 export async function fetchLedgerEntries() {
   try {
-    const res = await fetch('/api/v1/finance/ledger');
+    const res = await adminFetch('/api/v1/finance/ledger');
     if (!res.ok) {
       const errJson = await res.json().catch(() => ({}));
       throw new Error(errJson.message || `Failed to fetch ledger entries (HTTP ${res.status})`);
@@ -493,6 +527,7 @@ export async function fetchLedgerEntries() {
     const json = await res.json();
     return json.data?.entries || json.data || [];
   } catch (err) {
+    if (err?.status === 401 || err?.isAuthError) throw err;
     notifyToast(err.message, 'error');
     throw err;
   }
@@ -500,7 +535,7 @@ export async function fetchLedgerEntries() {
 
 export async function fetchSettlements() {
   try {
-    const res = await fetch('/api/v1/settlements');
+    const res = await adminFetch('/api/v1/settlements');
     if (!res.ok) {
       const errJson = await res.json().catch(() => ({}));
       throw new Error(errJson.message || `Failed to fetch settlements (HTTP ${res.status})`);
@@ -508,6 +543,7 @@ export async function fetchSettlements() {
     const json = await res.json();
     return json.data?.settlements || json.data || [];
   } catch (err) {
+    if (err?.status === 401 || err?.isAuthError) throw err;
     notifyToast(err.message, 'error');
     throw err;
   }
@@ -527,7 +563,7 @@ export async function processSettlement(settlementId, transactionRef = 'UTR-TRAN
   }
 
   try {
-    const res = await fetch(`/api/v1/settlements/${settlementId}/process`, {
+    const res = await adminFetch(`/api/v1/settlements/${settlementId}/process`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ transactionRef }),
@@ -536,7 +572,10 @@ export async function processSettlement(settlementId, transactionRef = 'UTR-TRAN
       const json = await res.json();
       return json.data;
     }
-  } catch {
+  } catch (err) {
+    if (err?.status === 401 || err?.isAuthError) {
+      throw err;
+    }
     // If backend unavailable, record in local ledger state and log audit event
   }
 
@@ -554,7 +593,7 @@ export async function processSettlement(settlementId, transactionRef = 'UTR-TRAN
 
 export async function fetchAuditLogs() {
   try {
-    const res = await fetch('/api/v1/admin/audit-logs');
+    const res = await adminFetch('/api/v1/admin/audit-logs');
     if (!res.ok) {
       const errJson = await res.json().catch(() => ({}));
       throw new Error(errJson.message || `Failed to fetch audit logs (HTTP ${res.status})`);
@@ -562,6 +601,7 @@ export async function fetchAuditLogs() {
     const json = await res.json();
     return json.data?.logs || json.data || [];
   } catch (err) {
+    if (err?.status === 401 || err?.isAuthError) throw err;
     notifyToast(err.message, 'error');
     throw err;
   }
@@ -584,7 +624,7 @@ export function logAuditEventLocal({ actor, entity, old, new: newVal, action, ip
 
 export async function fetchUsers() {
   try {
-    const res = await fetch('/api/v1/users');
+    const res = await adminFetch('/api/v1/users');
     if (!res.ok) {
       const errJson = await res.json().catch(() => ({}));
       throw new Error(errJson.message || `Failed to fetch users (HTTP ${res.status})`);
@@ -592,6 +632,7 @@ export async function fetchUsers() {
     const json = await res.json();
     return json.data?.users || json.data || [];
   } catch (err) {
+    if (err?.status === 401 || err?.isAuthError) throw err;
     notifyToast(err.message, 'error');
     throw err;
   }
